@@ -1,0 +1,23 @@
+{
+  "name": "dispatch",
+  "version": "0.1.0",
+  "description": "Discord chat capture and archival tool",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "electrobun dev",
+    "build": "electrobun build",
+    "start": "electrobun dev",
+    "rebuild": "bun build src/bun/index.ts --outdir build/dev-win-x64/Dispatch-dev/Resources/app/bun --target=bun --external electrobun/bun --external puppeteer-core"
+  },
+  "dependencies": {
+    "electrobun": "^1.12.3",
+    "puppeteer-core": "^24.37.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

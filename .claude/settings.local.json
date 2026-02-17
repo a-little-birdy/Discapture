@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:blackboard.sh)",
+      "WebFetch(domain:www.electrobun.dev)"
+    ]
+  }
+}

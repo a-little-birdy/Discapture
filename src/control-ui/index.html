@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dispatch</title>
+    <link rel="stylesheet" href="views://control-ui/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="control-bar">
+        <div id="title-section">
+          <h1>Dispatch</h1>
+          <span id="subtitle">Discord Chat Capture</span>
+        </div>
+        <div id="controls">
+          <button id="btn-start">Start Capture</button>
+          <button id="btn-stop" disabled>Stop</button>
+          <select id="output-format">
+            <option value="json">JSON Log</option>
+            <option value="csv">CSV Log</option>
+          </select>
+        </div>
+        <div id="status">
+          <span id="status-text">Click Start to launch Discord in a browser window.</span>
+          <div id="stats">
+            <span id="msg-count">Messages: 0</span>
+            <span id="ss-count">Screenshots: 0</span>
+          </div>
+        </div>
+        <button id="btn-open-folder" style="display: none">
+          Open Output Folder
+        </button>
+      </header>
+
+      <main id="content">
+        <div id="info-panel">
+          <h2>How it works</h2>
+          <ol>
+            <li>Click <strong>Start Capture</strong> to open Discord in a browser window</li>
+            <li>Log into Discord if needed (your session is saved for next time)</li>
+            <li>Navigate to the channel you want to capture</li>
+            <li>The tool will automatically scroll up, taking screenshots and logging messages</li>
+            <li>Click <strong>Stop</strong> at any time, or let it run until it reaches the top</li>
+          </ol>
+          <p id="output-info">Output is saved to <code>~/Documents/Dispatch/captures/</code></p>
+        </div>
+      </main>
+    </div>
+
+    <script src="views://control-ui/index.js"></script>
+  </body>
+</html>
