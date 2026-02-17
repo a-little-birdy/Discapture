@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build release
+        run: bash scripts/build.sh
+        env:
+          BUILD_ENV: release
+
+      - name: Package artifact
+        run: |
+          cd build/release-win-x64
+          7z a -tzip ../../Discatch-win-x64.zip Discatch/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Discatch-win-x64.zip
+          generate_release_notes: true

@@ -5,10 +5,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "electrobun dev",
-    "build": "electrobun build",
-    "start": "electrobun dev",
-    "rebuild": "bun build src/bun/index.ts --outdir build/dev-win-x64/Discatch-dev/Resources/app/bun --target=bun --external electrobun/bun --external puppeteer-core && bun build src/control-ui/index.ts --outdir build/dev-win-x64/Discatch-dev/Resources/app/views/control-ui --target=browser && cp src/control-ui/index.html build/dev-win-x64/Discatch-dev/Resources/app/views/control-ui/index.html && cp src/control-ui/style.css build/dev-win-x64/Discatch-dev/Resources/app/views/control-ui/style.css"
+    "build": "bash scripts/build.sh",
+    "rebuild": "bash scripts/build.sh",
+    "dev": "bash scripts/build.sh && electrobun dev",
+    "start": "bash scripts/build.sh && electrobun dev"
   },
   "dependencies": {
     "electrobun": "^1.12.3",
