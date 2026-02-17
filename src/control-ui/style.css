@@ -79,6 +79,15 @@ button:disabled {
   background: #d63851;
 }
 
+#btn-record {
+  background: #28a745;
+  color: white;
+}
+
+#btn-record:hover:not(:disabled) {
+  background: #218838;
+}
+
 #btn-stop {
   background: #533483;
   color: white;

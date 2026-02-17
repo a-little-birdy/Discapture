@@ -15,6 +15,10 @@ interface DispatchRPCSchema extends ElectrobunRPCSchema {
     requests: {
       startCapture: {
         params: { format: string };
+        response: { success: boolean; error?: string };
+      };
+      beginCapture: {
+        params: undefined;
         response: { success: boolean; sessionId: string; error?: string };
       };
       stopCapture: {
@@ -32,6 +36,7 @@ interface DispatchRPCSchema extends ElectrobunRPCSchema {
         messageCount: number;
         status: string;
       };
+      captureReady: {};
       captureComplete: {
         sessionId: string;
         outputPath: string;
@@ -65,16 +70,30 @@ const win = new BrowserWindow({
           console.log("[bun] startCapture:", params?.format);
 
           if (!params) {
-            return { success: false, sessionId: "", error: "No params" };
+            return { success: false, error: "No params" };
           }
 
           try {
-            const result = await engine.start(
+            const result = await engine.setup(
               { format: params.format },
               (data) => win.webview.rpc?.send.captureProgress(data),
               (data) => win.webview.rpc?.send.captureComplete(data),
-              (data) => win.webview.rpc?.send.captureError(data)
+              (data) => win.webview.rpc?.send.captureError(data),
+              () => win.webview.rpc?.send.captureReady({})
             );
+            return result;
+          } catch (err: any) {
+            return {
+              success: false,
+              error: err.message || "Unknown error",
+            };
+          }
+        },
+
+        beginCapture: async () => {
+          console.log("[bun] beginCapture");
+          try {
+            const result = await engine.beginCapture();
             return result;
           } catch (err: any) {
             return {

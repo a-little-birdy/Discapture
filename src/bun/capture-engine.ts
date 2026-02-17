@@ -26,6 +26,7 @@ type CompleteCallback = (data: {
 }) => void;
 
 type ErrorCallback = (data: { message: string }) => void;
+type ReadyCallback = () => void;
 
 // Find Chrome or Edge on the system
 function findBrowser(): string | null {
@@ -76,22 +77,30 @@ export class CaptureEngine {
   private allMessages: ParsedMessage[] = [];
   private seenMessageIds = new Set<string>();
 
+  // Callbacks stored from setup so beginCapture can use them
+  private sendProgress: ProgressCallback | null = null;
+  private sendComplete: CompleteCallback | null = null;
+  private sendError: ErrorCallback | null = null;
+  private format: string = "json";
+
   constructor(storage: FileStorage) {
     this.storage = storage;
   }
 
-  async start(
+  /**
+   * Phase 1: Launch browser, navigate to Discord, wait for chat, highlight it.
+   * Returns once the chat area is detected and highlighted, so the user can
+   * click "Begin Recording" in the control panel.
+   */
+  async setup(
     config: { format: string },
     sendProgress: ProgressCallback,
     sendComplete: CompleteCallback,
-    sendError: ErrorCallback
-  ): Promise<{ success: boolean; sessionId: string; error?: string }> {
-    if (this.isRunning) {
-      return {
-        success: false,
-        sessionId: "",
-        error: "Capture already in progress",
-      };
+    sendError: ErrorCallback,
+    sendReady: ReadyCallback
+  ): Promise<{ success: boolean; error?: string }> {
+    if (this.browser) {
+      return { success: false, error: "Browser already open" };
     }
 
     // Find a browser
@@ -99,17 +108,17 @@ export class CaptureEngine {
     if (!executablePath) {
       return {
         success: false,
-        sessionId: "",
         error:
           "Chrome or Edge not found. Please install Chrome or Microsoft Edge.",
       };
     }
     console.log(`[capture] Using browser: ${executablePath}`);
 
-    this.isRunning = true;
-    this.screenshotCount = 0;
-    this.allMessages = [];
-    this.seenMessageIds = new Set();
+    // Store callbacks for later use in beginCapture
+    this.sendProgress = sendProgress;
+    this.sendComplete = sendComplete;
+    this.sendError = sendError;
+    this.format = config.format;
 
     // Persistent profile so Discord login survives between sessions
     const homeDir = process.env.USERPROFILE || process.env.HOME || ".";
@@ -150,7 +159,7 @@ export class CaptureEngine {
 
       console.log("[capture] Discord loaded");
 
-      // Wait for the chat area to appear (user needs to be logged in and on a channel)
+      // Wait for the chat area to appear
       sendProgress({
         screenshotCount: 0,
         messageCount: 0,
@@ -160,11 +169,46 @@ export class CaptureEngine {
       await this.waitForChat();
       console.log("[capture] Chat area detected");
 
-      // Let Discord finish rendering messages before we start capturing
-      await new Promise((r) => setTimeout(r, 3000));
+      sendProgress({
+        screenshotCount: 0,
+        messageCount: 0,
+        status: "Chat area detected! Click Begin Recording when ready.",
+      });
 
+      // Tell the UI we're ready
+      sendReady();
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("[capture] Setup error:", err.message);
+      sendError({ message: err.message });
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Phase 2: Start the actual capture (called when user clicks "Begin Recording").
+   */
+  async beginCapture(): Promise<{ success: boolean; sessionId: string; error?: string }> {
+    if (!this.page || !this.browser) {
+      return { success: false, sessionId: "", error: "Browser not ready. Click Start Capture first." };
+    }
+    if (this.isRunning) {
+      return { success: false, sessionId: "", error: "Capture already in progress" };
+    }
+
+    const sendProgress = this.sendProgress!;
+    const sendComplete = this.sendComplete!;
+    const sendError = this.sendError!;
+
+    this.isRunning = true;
+    this.screenshotCount = 0;
+    this.allMessages = [];
+    this.seenMessageIds = new Set();
+
+    try {
       // Create output session
-      this.session = this.storage.createSession(config.format);
+      this.session = this.storage.createSession(this.format);
       console.log(`[capture] Session: ${this.session.outputDir}`);
 
       sendProgress({
@@ -207,11 +251,11 @@ export class CaptureEngine {
     }
   }
 
+
+
   private async waitForChat(): Promise<void> {
     if (!this.page) throw new Error("No page");
 
-    // Try to find the chat area. If user isn't logged in or isn't on a channel,
-    // we wait up to 5 minutes for them to navigate there.
     const chatSelectors = [
       '[class*="chatContent_"]',
       '[class*="chat_"] > [class*="content_"]',
@@ -345,13 +389,11 @@ export class CaptureEngine {
     if (!this.page) return { scrollTop: 0, scrollHeight: 0, msgCount: 0, isBeginning: false };
 
     return await this.page.evaluate(() => {
-      // Target the managed reactive scroller — the actual scrollable chat area
       const scroller =
         document.querySelector('[class*="managedReactiveScroller_"]') ||
         document.querySelector('[class*="scroller_"][class*="auto_"]');
       if (!scroller) return { scrollTop: 0, scrollHeight: 0, msgCount: 0, isBeginning: false };
 
-      // Only match Discord's actual "beginning of channel" indicators
       const isBeginning = !!(
         document.querySelector('[class*="emptyChannelIcon_"]') ||
         document.querySelector('[class*="beginningOfChannel_"]')
@@ -376,7 +418,6 @@ export class CaptureEngine {
         () => {
           const msgs = document.querySelectorAll('[id^="message-content-"]');
           if (msgs.length < 2) return false;
-          // Check that at least one message has real text (not skeleton)
           return Array.from(msgs).some(
             (m) => (m.textContent?.trim().length || 0) > 5
           );
@@ -406,47 +447,23 @@ export class CaptureEngine {
       status: `Capturing... (${this.allMessages.length} messages, ${this.screenshotCount} screenshots)`,
     });
 
-    // --- Warm-up scrolls: exhaust Discord's batch loading ---
-    // These absorb the big jumps so the capture loop scrolls smoothly
-    for (let dud = 0; dud < 5; dud++) {
-      const before = await this.getScrollState();
-      await this.page.evaluate(() => {
-        const scroller =
-          document.querySelector('[class*="managedReactiveScroller_"]') ||
-          document.querySelector('[class*="scroller_"][class*="auto_"]');
-        if (scroller) {
-          scroller.scrollTop = scroller.scrollTop - 100;
-        }
-      });
-      await new Promise((r) => setTimeout(r, 2000));
-      const after = await this.getScrollState();
-      const loaded = after.scrollHeight > before.scrollHeight || after.msgCount > before.msgCount;
-      console.log(`[capture] Warm-up scroll ${dud + 1}: loaded=${loaded} msgs=${after.msgCount} scrollTop=${after.scrollTop}`);
-      // Also capture during warm-up so we don't miss content
-      const msgs = await this.parseVisibleMessages();
-      this.accumulateMessages(msgs);
-      await this.takeScreenshot();
-      if (!loaded) break;
+    // --- Focus the message input for PageUp scrolling ---
+    const textBox = await this.page.$('div[role="textbox"]');
+    if (textBox) {
+      await textBox.click();
+      console.log("[capture] Focused message input for PageUp scrolling");
     }
-    console.log("[capture] Warm-up complete, starting smooth scroll capture");
 
-    // --- Scroll loop: scroll up by fixed amount, wait, capture, repeat ---
+    // --- Scroll loop: PageUp, wait, capture, repeat ---
     let stuckCount = 0;
 
     while (this.isRunning) {
       // 1. Record state before scrolling
       const beforeScroll = await this.getScrollState();
 
-      // 2. Scroll up by 100px (small steps to avoid skipping content)
-      await this.page.evaluate(() => {
-        const scroller =
-          document.querySelector('[class*="managedReactiveScroller_"]') ||
-          document.querySelector('[class*="scroller_"][class*="auto_"]');
-        if (scroller) {
-          scroller.scrollTop = scroller.scrollTop - 100;
-        }
-      });
-      console.log(`[capture] Scrolled -100px (was scrollTop: ${beforeScroll.scrollTop})`);
+      // 2. Scroll up with PageUp
+      await this.page.keyboard.press("PageUp");
+      console.log(`[capture] PageUp (was scrollTop: ${beforeScroll.scrollTop})`);
 
       // 3. Wait for Discord to fetch and render older messages
       await new Promise((r) => setTimeout(r, 3000));
@@ -464,13 +481,13 @@ export class CaptureEngine {
         afterScroll.msgCount > beforeScroll.msgCount;
 
       if (afterScroll.scrollTop <= 1 && !newContentLoaded) {
-        stuckCount++;
+        stuckCount = 1;
       } else {
         stuckCount = 0;
       }
 
       const reachedTop =
-        (afterScroll.scrollTop <= 1 && stuckCount >= 4) ||
+        (afterScroll.scrollTop <= 1 && stuckCount >= 1) ||
         afterScroll.isBeginning;
 
       console.log(

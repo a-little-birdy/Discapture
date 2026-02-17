@@ -11,6 +11,10 @@ interface DispatchRPCSchema extends ElectrobunRPCSchema {
     requests: {
       startCapture: {
         params: { format: string };
+        response: { success: boolean; error?: string };
+      };
+      beginCapture: {
+        params: undefined;
         response: { success: boolean; sessionId: string; error?: string };
       };
       stopCapture: {
@@ -28,6 +32,7 @@ interface DispatchRPCSchema extends ElectrobunRPCSchema {
         messageCount: number;
         status: string;
       };
+      captureReady: {};
       captureComplete: {
         sessionId: string;
         outputPath: string;
@@ -43,6 +48,7 @@ interface DispatchRPCSchema extends ElectrobunRPCSchema {
 
 // --- DOM references ---
 const btnStart = document.getElementById("btn-start") as HTMLButtonElement;
+const btnRecord = document.getElementById("btn-record") as HTMLButtonElement;
 const btnStop = document.getElementById("btn-stop") as HTMLButtonElement;
 const btnOpenFolder = document.getElementById(
   "btn-open-folder"
@@ -70,10 +76,16 @@ const electrobun = new Electroview({
           msgCount.textContent = `Messages: ${data.messageCount}`;
           ssCount.textContent = `Screenshots: ${data.screenshotCount}`;
         },
+        captureReady: () => {
+          // Browser is open, chat is highlighted — enable "Begin Recording"
+          btnRecord.disabled = false;
+          btnStart.disabled = true;
+        },
         captureComplete: (data) => {
           statusText.textContent = `Capture complete! ${data.messageCount} messages, ${data.screenshotCount} screenshots.`;
           lastOutputPath = data.outputPath;
           btnStart.disabled = false;
+          btnRecord.disabled = true;
           btnStop.disabled = true;
           btnOpenFolder.style.display = "inline-block";
           controlBar.classList.remove("capturing");
@@ -81,6 +93,7 @@ const electrobun = new Electroview({
         captureError: (data) => {
           statusText.textContent = `Error: ${data.message}`;
           btnStart.disabled = false;
+          btnRecord.disabled = true;
           btnStop.disabled = true;
           controlBar.classList.remove("capturing");
         },
@@ -91,23 +104,43 @@ const electrobun = new Electroview({
 
 // --- Button handlers ---
 
+// Phase 1: Launch browser, navigate to Discord, highlight chat area
 btnStart.addEventListener("click", async () => {
   const format = outputFormat.value;
 
   btnStart.disabled = true;
-  btnStop.disabled = false;
+  btnRecord.disabled = true;
+  btnStop.disabled = true;
   btnOpenFolder.style.display = "none";
-  controlBar.classList.add("capturing");
-  statusText.textContent = "Starting capture...";
+  statusText.textContent = "Starting...";
   msgCount.textContent = "Messages: 0";
   ssCount.textContent = "Screenshots: 0";
 
-  // Bun finds the Discord webview itself - no webviewId needed from the browser
   const result = await electrobun.rpc?.request.startCapture({ format });
+
+  if (result && result.success) {
+    // Setup complete — chat is highlighted, enable recording
+    btnRecord.disabled = false;
+    btnStart.disabled = true;
+  } else {
+    statusText.textContent = `Failed: ${result?.error || "Unknown error"}`;
+    btnStart.disabled = false;
+  }
+});
+
+// Phase 2: Begin the actual recording
+btnRecord.addEventListener("click", async () => {
+  btnRecord.disabled = true;
+  btnStop.disabled = false;
+  controlBar.classList.add("capturing");
+  statusText.textContent = "Beginning capture...";
+
+  const result = await electrobun.rpc?.request.beginCapture();
 
   if (result && !result.success) {
     statusText.textContent = `Failed: ${result.error || "Unknown error"}`;
     btnStart.disabled = false;
+    btnRecord.disabled = true;
     btnStop.disabled = true;
     controlBar.classList.remove("capturing");
   }
@@ -118,6 +151,7 @@ btnStop.addEventListener("click", async () => {
   await electrobun.rpc?.request.stopCapture();
   btnStop.disabled = true;
   btnStart.disabled = false;
+  btnRecord.disabled = true;
   controlBar.classList.remove("capturing");
   statusText.textContent = "Capture stopped by user.";
 });
