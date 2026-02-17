@@ -8,46 +8,68 @@
   </head>
   <body>
     <div id="app">
-      <header id="control-bar">
-        <div id="title-section">
-          <h1>Dispatch</h1>
-          <span id="subtitle">Discord Chat Capture</span>
-        </div>
-        <div id="controls">
-          <button id="btn-start">Open Discord</button>
-          <button id="btn-record" disabled>Begin Recording</button>
-          <button id="btn-stop" disabled>Stop</button>
-          <select id="output-format">
-            <option value="json">JSON Log</option>
-            <option value="csv">CSV Log</option>
-          </select>
-        </div>
-        <div id="status">
-          <span id="status-text">Click Start to launch Discord in a browser window.</span>
-          <div id="stats">
-            <span id="msg-count">Messages: 0</span>
-            <span id="ss-count">Screenshots: 0</span>
+      <!-- Phase: idle -->
+      <section id="phase-idle" class="phase">
+        <h1>Dispatch</h1>
+        <p class="tagline">Discord Chat Capture</p>
+        <div class="actions">
+          <button id="btn-start" class="btn-primary btn-lg">Open Discord</button>
+          <div class="format-row">
+            <label for="output-format">Output format</label>
+            <select id="output-format">
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+            </select>
           </div>
         </div>
-        <button id="btn-open-folder" style="display: none">
-          Open Output Folder
-        </button>
-      </header>
+        <p class="hint">Opens a browser window with Discord. Your login persists between sessions.</p>
+      </section>
 
-      <main id="content">
-        <div id="info-panel">
-          <h2>How it works</h2>
-          <ol>
-            <li>Click <strong>Start Capture</strong> to open Discord in a browser window</li>
-            <li>Log into Discord if needed (your session is saved for next time)</li>
-            <li>Navigate to the channel you want to capture</li>
-            <li>The chat area will be highlighted &mdash; verify it's correct</li>
-            <li>Click <strong>Begin Recording</strong> to start scrolling and capturing</li>
-            <li>Click <strong>Stop</strong> at any time, or let it run until it reaches the top</li>
-          </ol>
-          <p id="output-info">Output is saved to <code>~/Documents/Dispatch/captures/</code></p>
+      <!-- Phase: connecting -->
+      <section id="phase-connecting" class="phase hidden">
+        <h1>Dispatch</h1>
+        <div class="spinner"></div>
+        <p id="connecting-status" class="status-msg">Launching browser...</p>
+      </section>
+
+      <!-- Phase: ready -->
+      <section id="phase-ready" class="phase hidden">
+        <h1>Dispatch</h1>
+        <p class="status-msg">Chat area detected. Ready to capture.</p>
+        <button id="btn-record" class="btn-go btn-lg">Begin Recording</button>
+        <p class="hint">Navigate to the channel you want, then click above.</p>
+      </section>
+
+      <!-- Phase: recording -->
+      <section id="phase-recording" class="phase hidden">
+        <h1>Dispatch</h1>
+        <div class="live-stats">
+          <div class="stat">
+            <span id="msg-count" class="stat-value">0</span>
+            <span class="stat-label">Messages</span>
+          </div>
+          <div class="stat">
+            <span id="ss-count" class="stat-value">0</span>
+            <span class="stat-label">Screenshots</span>
+          </div>
         </div>
-      </main>
+        <p id="recording-status" class="status-msg">Capturing...</p>
+        <button id="btn-stop" class="btn-stop btn-lg">Stop Recording</button>
+      </section>
+
+      <!-- Phase: done -->
+      <section id="phase-done" class="phase hidden">
+        <h1>Dispatch</h1>
+        <p class="done-summary">
+          Captured <strong id="done-msgs">0</strong> messages,
+          <strong id="done-ss">0</strong> screenshots
+        </p>
+        <p id="done-path" class="done-path"></p>
+        <div class="actions">
+          <button id="btn-open-folder" class="btn-lg btn-go">Open Folder</button>
+          <button id="btn-again" class="btn-primary btn-lg">Record Another</button>
+        </div>
+      </section>
     </div>
 
     <script src="views://control-ui/index.js"></script>

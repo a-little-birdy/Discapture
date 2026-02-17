@@ -3,12 +3,17 @@ import { FileStorage, type CaptureSession } from "./file-storage";
 import { join } from "path";
 import { existsSync } from "fs";
 
+interface Attachment {
+  url: string;
+  localFile?: string;
+}
+
 interface ParsedMessage {
   id: string;
   author: string;
   timestamp: string;
   content: string;
-  attachments: string[];
+  attachments: Attachment[];
   embeds: string[];
 }
 
@@ -220,6 +225,37 @@ export class CaptureEngine {
       // Run the capture loop
       await this.captureLoop(sendProgress);
 
+      // Download attachments and map URLs to local files
+      const allUrls = [
+        ...new Set(this.allMessages.flatMap((m) => m.attachments.map((a) => a.url))),
+      ];
+      if (allUrls.length > 0) {
+        sendProgress({
+          screenshotCount: this.screenshotCount,
+          messageCount: this.allMessages.length,
+          status: `Downloading ${allUrls.length} attachments...`,
+        });
+        const urlToFile = await this.storage.downloadAttachments(
+          this.session,
+          allUrls,
+          (downloaded, total) => {
+            sendProgress({
+              screenshotCount: this.screenshotCount,
+              messageCount: this.allMessages.length,
+              status: `Downloading attachments... (${downloaded}/${total})`,
+            });
+          }
+        );
+        console.log(`[capture] Downloaded ${urlToFile.size}/${allUrls.length} attachments`);
+
+        // Add local file references to each message's attachments
+        for (const msg of this.allMessages) {
+          for (const att of msg.attachments) {
+            att.localFile = urlToFile.get(att.url);
+          }
+        }
+      }
+
       // Save the log
       await this.storage.saveLog(this.session, this.allMessages);
       console.log(`[capture] Log saved: ${this.allMessages.length} messages`);
@@ -292,7 +328,7 @@ export class CaptureEngine {
         author: string;
         timestamp: string;
         content: string;
-        attachments: string[];
+        attachments: { url: string }[];
         embeds: string[];
       }> = [];
       let currentAuthor = "";
@@ -313,7 +349,7 @@ export class CaptureEngine {
         const contentEl = group.querySelector('[id^="message-content-"]');
         const content = contentEl?.textContent?.trim() || "";
 
-        const attachments: string[] = [];
+        const urls: string[] = [];
         group
           .querySelectorAll(
             'a[href*="cdn.discordapp.com"], a[href*="media.discordapp.net"], a[class*="fileNameLink_"]'
@@ -321,13 +357,13 @@ export class CaptureEngine {
           .forEach((a: Element) => {
             const href =
               (a as HTMLAnchorElement).href || a.getAttribute("href") || "";
-            if (href) attachments.push(href);
+            if (href) urls.push(href);
           });
         group
           .querySelectorAll('[class*="imageWrapper_"] img, [class*="attachment_"] img')
           .forEach((img: Element) => {
             const src = (img as HTMLImageElement).src || "";
-            if (src && !attachments.includes(src)) attachments.push(src);
+            if (src && !urls.includes(src)) urls.push(src);
           });
 
         const embeds: string[] = [];
@@ -343,7 +379,7 @@ export class CaptureEngine {
           author: currentAuthor,
           timestamp: currentTimestamp,
           content,
-          attachments,
+          attachments: urls.map((url) => ({ url })),
           embeds,
         });
       });
@@ -465,8 +501,8 @@ export class CaptureEngine {
       await this.page.keyboard.press("PageUp");
       console.log(`[capture] PageUp (was scrollTop: ${beforeScroll.scrollTop})`);
 
-      // 3. Wait for Discord to fetch and render older messages
-      await new Promise((r) => setTimeout(r, 3000));
+      // 3. Wait for Discord to finish scrolling and load content
+      await new Promise((r) => setTimeout(r, 500));
 
       // 4. Parse messages and take screenshot AFTER content has loaded
       const messages = await this.parseVisibleMessages();

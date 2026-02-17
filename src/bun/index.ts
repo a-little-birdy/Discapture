@@ -25,6 +25,10 @@ interface DispatchRPCSchema extends ElectrobunRPCSchema {
         params: undefined;
         response: { success: boolean };
       };
+      openFolder: {
+        params: { path: string };
+        response: { success: boolean };
+      };
     };
     messages: {};
   }>;
@@ -107,6 +111,16 @@ const win = new BrowserWindow({
         stopCapture: async () => {
           await engine.stop();
           return { success: true };
+        },
+
+        openFolder: async (params) => {
+          if (!params?.path) return { success: false };
+          try {
+            Bun.spawn(["explorer.exe", params.path.replace(/\//g, "\\")]);
+            return { success: true };
+          } catch {
+            return { success: false };
+          }
         },
       },
       messages: {},

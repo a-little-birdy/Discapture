@@ -24,10 +24,14 @@ export class FileStorage {
     const id = `capture-${timestamp}`;
     const outputDir = join(this.baseDir, id);
     const screenshotsDir = join(outputDir, "screenshots");
+    const attachmentsDir = join(outputDir, "attachments");
 
     // Ensure directories exist
     if (!existsSync(screenshotsDir)) {
       mkdirSync(screenshotsDir, { recursive: true });
+    }
+    if (!existsSync(attachmentsDir)) {
+      mkdirSync(attachmentsDir, { recursive: true });
     }
 
     return {
@@ -52,6 +56,49 @@ export class FileStorage {
     return filePath;
   }
 
+  async downloadAttachments(
+    session: CaptureSession,
+    urls: string[],
+    onProgress?: (downloaded: number, total: number) => void
+  ): Promise<Map<string, string>> {
+    const attachmentsDir = join(session.outputDir, "attachments");
+    let downloaded = 0;
+    const seenFilenames = new Set<string>();
+    const urlToFile = new Map<string, string>();
+
+    for (const url of urls) {
+      try {
+        // Extract filename from URL, strip query params
+        let filename = decodeURIComponent(
+          url.split("/").pop()?.split("?")[0] || "unknown"
+        );
+
+        // Deduplicate filenames
+        if (seenFilenames.has(filename)) {
+          const ext = filename.includes(".") ? "." + filename.split(".").pop() : "";
+          const base = filename.replace(ext, "");
+          let i = 2;
+          while (seenFilenames.has(`${base}-${i}${ext}`)) i++;
+          filename = `${base}-${i}${ext}`;
+        }
+        seenFilenames.add(filename);
+
+        const res = await fetch(url);
+        if (!res.ok) continue;
+
+        const buffer = await res.arrayBuffer();
+        await Bun.write(join(attachmentsDir, filename), buffer);
+        urlToFile.set(url, `attachments/${filename}`);
+        downloaded++;
+        onProgress?.(downloaded, urls.length);
+      } catch (err: any) {
+        console.log(`[capture] Failed to download attachment: ${url} - ${err.message}`);
+      }
+    }
+
+    return urlToFile;
+  }
+
   async saveLog(
     session: CaptureSession,
     messages: Array<{
@@ -59,7 +106,7 @@ export class FileStorage {
       author: string;
       timestamp: string;
       content: string;
-      attachments: string[];
+      attachments: { url: string; localFile?: string }[];
       embeds: string[];
     }>
   ): Promise<string> {
@@ -88,7 +135,7 @@ export class FileStorage {
             escapeCsv(m.author),
             escapeCsv(m.timestamp),
             escapeCsv(m.content),
-            escapeCsv(m.attachments.join("; ")),
+            escapeCsv(m.attachments.map((a) => a.localFile || a.url).join("; ")),
             escapeCsv(m.embeds.join("; ")),
           ].join(",")
         )
