@@ -319,14 +319,8 @@ export class CaptureEngine {
     );
 
     try {
-      const chatEl = await this.page.$(
-        '[class*="chatContent_"], [class*="chat_"] > [class*="content_"]'
-      );
-      if (chatEl) {
-        await chatEl.screenshot({ path: screenshotPath });
-      } else {
-        await this.page.screenshot({ path: screenshotPath });
-      }
+      // Use page.screenshot() to avoid element.screenshot() scrolling into view
+      await this.page.screenshot({ path: screenshotPath });
     } catch (e: any) {
       console.log(`[capture] Screenshot failed: ${e.message}`);
       this.screenshotCount--;
@@ -375,22 +369,29 @@ export class CaptureEngine {
   private async captureLoop(sendProgress: ProgressCallback): Promise<void> {
     if (!this.page || !this.session) return;
 
-    // --- Wait for messages to fully render (not just the container) ---
+    // --- Wait for messages to fully render with actual text content ---
     console.log("[capture] Waiting for messages to render...");
     try {
-      await this.page.waitForSelector('[id^="message-content-"]', { timeout: 30000 });
-      // Wait for network to settle (images, avatars, embeds)
-      await this.page.waitForNetworkIdle({ idleTime: 2000, timeout: 15000 });
+      await this.page.waitForFunction(
+        () => {
+          const msgs = document.querySelectorAll('[id^="message-content-"]');
+          if (msgs.length < 2) return false;
+          // Check that at least one message has real text (not skeleton)
+          return Array.from(msgs).some(
+            (m) => (m.textContent?.trim().length || 0) > 5
+          );
+        },
+        { timeout: 30000 }
+      );
+      console.log("[capture] Messages with text content detected");
     } catch {
-      // Timeout is OK — take what we have
-      console.log("[capture] Timed out waiting for full render, continuing anyway");
+      console.log("[capture] Timed out waiting for message text, continuing anyway");
     }
-    // Final settle
-    await new Promise((r) => setTimeout(r, 1000));
+    // Wait for avatars/images/embeds to load
+    await new Promise((r) => setTimeout(r, 3000));
 
-    console.log("[capture] Taking initial screenshot...");
-
-    // --- Initial capture: screenshot the bottom of the chat ---
+    // --- Initial capture: screenshot the bottom of the chat BEFORE any scrolling ---
+    console.log("[capture] Taking initial screenshot at bottom...");
     const initialMessages = await this.parseVisibleMessages();
     this.accumulateMessages(initialMessages);
     await this.takeScreenshot();
@@ -405,6 +406,30 @@ export class CaptureEngine {
       status: `Capturing... (${this.allMessages.length} messages, ${this.screenshotCount} screenshots)`,
     });
 
+    // --- Warm-up scrolls: exhaust Discord's batch loading ---
+    // These absorb the big jumps so the capture loop scrolls smoothly
+    for (let dud = 0; dud < 5; dud++) {
+      const before = await this.getScrollState();
+      await this.page.evaluate(() => {
+        const scroller =
+          document.querySelector('[class*="managedReactiveScroller_"]') ||
+          document.querySelector('[class*="scroller_"][class*="auto_"]');
+        if (scroller) {
+          scroller.scrollTop = scroller.scrollTop - 100;
+        }
+      });
+      await new Promise((r) => setTimeout(r, 2000));
+      const after = await this.getScrollState();
+      const loaded = after.scrollHeight > before.scrollHeight || after.msgCount > before.msgCount;
+      console.log(`[capture] Warm-up scroll ${dud + 1}: loaded=${loaded} msgs=${after.msgCount} scrollTop=${after.scrollTop}`);
+      // Also capture during warm-up so we don't miss content
+      const msgs = await this.parseVisibleMessages();
+      this.accumulateMessages(msgs);
+      await this.takeScreenshot();
+      if (!loaded) break;
+    }
+    console.log("[capture] Warm-up complete, starting smooth scroll capture");
+
     // --- Scroll loop: scroll up by fixed amount, wait, capture, repeat ---
     let stuckCount = 0;
 
@@ -412,17 +437,16 @@ export class CaptureEngine {
       // 1. Record state before scrolling
       const beforeScroll = await this.getScrollState();
 
-      // 2. Scroll up by ~half a viewport (small steps for better coverage)
+      // 2. Scroll up by 100px (small steps to avoid skipping content)
       await this.page.evaluate(() => {
         const scroller =
           document.querySelector('[class*="managedReactiveScroller_"]') ||
           document.querySelector('[class*="scroller_"][class*="auto_"]');
         if (scroller) {
-          const amount = Math.min(Math.floor(scroller.clientHeight * 0.5), 300);
-          scroller.scrollTop = scroller.scrollTop - amount;
+          scroller.scrollTop = scroller.scrollTop - 100;
         }
       });
-      console.log(`[capture] Scrolled up (was scrollTop: ${beforeScroll.scrollTop})`);
+      console.log(`[capture] Scrolled -100px (was scrollTop: ${beforeScroll.scrollTop})`);
 
       // 3. Wait for Discord to fetch and render older messages
       await new Promise((r) => setTimeout(r, 3000));
