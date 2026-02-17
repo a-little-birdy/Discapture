@@ -127,7 +127,7 @@ export class CaptureEngine {
 
     // Persistent profile so Discord login survives between sessions
     const homeDir = process.env.USERPROFILE || process.env.HOME || ".";
-    const userDataDir = join(homeDir, "Documents", "Dispatch", "discord-profile");
+    const userDataDir = join(homeDir, "Documents", "Discatch", "discord-profile");
 
     try {
       sendProgress({

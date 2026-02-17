@@ -13,7 +13,7 @@ export class FileStorage {
 
   constructor() {
     const homeDir = process.env.USERPROFILE || process.env.HOME || ".";
-    this.baseDir = join(homeDir, "Documents", "Dispatch", "captures");
+    this.baseDir = join(homeDir, "Documents", "Discatch", "captures");
   }
 
   createSession(format: string): CaptureSession {

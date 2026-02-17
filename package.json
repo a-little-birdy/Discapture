@@ -1,5 +1,5 @@
 {
-  "name": "dispatch",
+  "name": "discatch",
   "version": "0.1.0",
   "description": "Discord chat capture and archival tool",
   "type": "module",
@@ -8,7 +8,7 @@
     "dev": "electrobun dev",
     "build": "electrobun build",
     "start": "electrobun dev",
-    "rebuild": "bun build src/bun/index.ts --outdir build/dev-win-x64/Dispatch-dev/Resources/app/bun --target=bun --external electrobun/bun --external puppeteer-core && bun build src/control-ui/index.ts --outdir build/dev-win-x64/Dispatch-dev/Resources/app/views/control-ui --target=browser && cp src/control-ui/index.html build/dev-win-x64/Dispatch-dev/Resources/app/views/control-ui/index.html && cp src/control-ui/style.css build/dev-win-x64/Dispatch-dev/Resources/app/views/control-ui/style.css"
+    "rebuild": "bun build src/bun/index.ts --outdir build/dev-win-x64/Discatch-dev/Resources/app/bun --target=bun --external electrobun/bun --external puppeteer-core && bun build src/control-ui/index.ts --outdir build/dev-win-x64/Discatch-dev/Resources/app/views/control-ui --target=browser && cp src/control-ui/index.html build/dev-win-x64/Discatch-dev/Resources/app/views/control-ui/index.html && cp src/control-ui/style.css build/dev-win-x64/Discatch-dev/Resources/app/views/control-ui/style.css"
   },
   "dependencies": {
     "electrobun": "^1.12.3",

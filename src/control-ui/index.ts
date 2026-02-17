@@ -6,7 +6,7 @@ import {
 
 // --- RPC Schema (must match bun side) ---
 
-interface DispatchRPCSchema extends ElectrobunRPCSchema {
+interface DiscatchRPCSchema extends ElectrobunRPCSchema {
   bun: RPCSchema<{
     requests: {
       startCapture: {
@@ -80,7 +80,7 @@ const btnOpenFolder = document.getElementById("btn-open-folder") as HTMLButtonEl
 // --- Initialize Electroview with RPC ---
 
 const electrobun = new Electroview({
-  rpc: Electroview.defineRPC<DispatchRPCSchema>({
+  rpc: Electroview.defineRPC<DiscatchRPCSchema>({
     maxRequestTime: 600000,
     handlers: {
       requests: {},

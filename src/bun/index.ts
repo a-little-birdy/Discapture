@@ -10,7 +10,7 @@ import { FileStorage } from "./file-storage";
 
 // --- RPC Schema ---
 
-interface DispatchRPCSchema extends ElectrobunRPCSchema {
+interface DiscatchRPCSchema extends ElectrobunRPCSchema {
   bun: RPCSchema<{
     requests: {
       startCapture: {
@@ -60,13 +60,13 @@ const engine = new CaptureEngine(storage);
 
 // --- Create the main window ---
 const win = new BrowserWindow({
-  title: "Dispatch - Discord Chat Capture",
+  title: "Discatch - Discord Chat Capture",
   frame: { x: 100, y: 100, width: 800, height: 400 },
   url: "views://control-ui/index.html",
   titleBarStyle: "default",
   transparent: false,
   sandbox: false,
-  rpc: BrowserView.defineRPC<DispatchRPCSchema>({
+  rpc: BrowserView.defineRPC<DiscatchRPCSchema>({
     maxRequestTime: 600000,
     handlers: {
       requests: {
@@ -131,7 +131,7 @@ const win = new BrowserWindow({
 // --- Application Menu ---
 ApplicationMenu.setApplicationMenu([
   {
-    submenu: [{ label: "Quit Dispatch", role: "quit" }],
+    submenu: [{ label: "Quit Discatch", role: "quit" }],
   },
   {
     label: "Edit",
@@ -151,4 +151,4 @@ ApplicationMenu.setApplicationMenu([
   },
 ]);
 
-console.log("[bun] Dispatch app started");
+console.log("[bun] Discatch app started");
