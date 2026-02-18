@@ -52,7 +52,7 @@ jobs:
       - name: Build installer (Windows)
         if: matrix.platform == 'win'
         run: |
-          iscc //DAppVersion="${{ github.ref_name }}" //DBuildDir="build\release-win-x64\Discapture" //DOutputDir="." scripts\installer.iss
+          iscc /DAppVersion="${{ github.ref_name }}" /DBuildDir="build\release-win-x64\Discapture" /DOutputDir="." scripts\installer.iss
 
       # --- macOS: .app bundle in .dmg ---
       - name: Package .app bundle (macOS)
