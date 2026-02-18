@@ -9,13 +9,36 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            arch: x64
+            artifact: Discapture-win-x64.zip
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            artifact: Discapture-darwin-arm64.tar.gz
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            artifact: Discapture-linux-x64.tar.gz
+
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Install system dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libappindicator3-dev
 
       - name: Install dependencies
         run: bun install
@@ -25,13 +48,36 @@ jobs:
         env:
           BUILD_ENV: release
 
-      - name: Package artifact
+      - name: Package artifact (Windows)
+        if: matrix.platform == 'win'
         run: |
-          cd build/release-win-x64
-          7z a -tzip ../../Discapture-win-x64.zip Discapture/
+          cd build/release-${{ matrix.platform }}-${{ matrix.arch }}
+          7z a -tzip ../../${{ matrix.artifact }} Discapture/
+
+      - name: Package artifact (macOS/Linux)
+        if: matrix.platform != 'win'
+        run: |
+          cd build/release-${{ matrix.platform }}-${{ matrix.arch }}
+          tar -czf ../../${{ matrix.artifact }} Discapture/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Discapture-win-x64.zip
+          files: artifacts/*
           generate_release_notes: true
