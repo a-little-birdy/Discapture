@@ -4,7 +4,8 @@
 AppName=Discapture
 AppVersion={#AppVersion}
 AppPublisher=Discapture
-DefaultDirName={autopf}\Discapture
+DefaultDirName={localappdata}\Discapture
+PrivilegesRequired=lowest
 DefaultGroupName=Discapture
 UninstallDisplayIcon={app}\bin\Discapture.exe
 OutputDir={#Root}\{#OutputDir}
