@@ -2,8 +2,8 @@ import type { ElectrobunConfig } from "electrobun";
 
 export default {
   app: {
-    name: "Discatch",
-    identifier: "dev.discatch.app",
+    name: "Discapture",
+    identifier: "dev.discapture.app",
     version: "0.1.0",
     description: "Discord chat capture and archival tool",
   },

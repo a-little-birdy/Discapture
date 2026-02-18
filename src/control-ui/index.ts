@@ -6,7 +6,7 @@ import {
 
 // --- RPC Schema (must match bun side) ---
 
-interface DiscatchRPCSchema extends ElectrobunRPCSchema {
+interface DiscaptureRPCSchema extends ElectrobunRPCSchema {
   bun: RPCSchema<{
     requests: {
       startCapture: {
@@ -23,6 +23,10 @@ interface DiscatchRPCSchema extends ElectrobunRPCSchema {
       };
       openFolder: {
         params: { path: string };
+        response: { success: boolean };
+      };
+      closeWindow: {
+        params: undefined;
         response: { success: boolean };
       };
     };
@@ -76,11 +80,12 @@ const doneMsgs = document.getElementById("done-msgs") as HTMLElement;
 const doneSs = document.getElementById("done-ss") as HTMLElement;
 const donePath = document.getElementById("done-path") as HTMLParagraphElement;
 const btnOpenFolder = document.getElementById("btn-open-folder") as HTMLButtonElement;
+const btnClose = document.getElementById("btn-close") as HTMLButtonElement;
 
 // --- Initialize Electroview with RPC ---
 
 const electrobun = new Electroview({
-  rpc: Electroview.defineRPC<DiscatchRPCSchema>({
+  rpc: Electroview.defineRPC<DiscaptureRPCSchema>({
     maxRequestTime: 600000,
     handlers: {
       requests: {},
@@ -158,4 +163,8 @@ btnOpenFolder.addEventListener("click", async () => {
   if (path) {
     await electrobun.rpc?.request.openFolder({ path });
   }
+});
+
+btnClose.addEventListener("click", async () => {
+  await electrobun.rpc?.request.closeWindow();
 });

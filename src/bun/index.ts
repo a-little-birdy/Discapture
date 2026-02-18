@@ -10,7 +10,7 @@ import { FileStorage } from "./file-storage";
 
 // --- RPC Schema ---
 
-interface DiscatchRPCSchema extends ElectrobunRPCSchema {
+interface DiscaptureRPCSchema extends ElectrobunRPCSchema {
   bun: RPCSchema<{
     requests: {
       startCapture: {
@@ -27,6 +27,10 @@ interface DiscatchRPCSchema extends ElectrobunRPCSchema {
       };
       openFolder: {
         params: { path: string };
+        response: { success: boolean };
+      };
+      closeWindow: {
+        params: undefined;
         response: { success: boolean };
       };
     };
@@ -60,13 +64,13 @@ const engine = new CaptureEngine(storage);
 
 // --- Create the main window ---
 const win = new BrowserWindow({
-  title: "Discatch - Discord Chat Capture",
+  title: "Discapture - Discord Chat Capture",
   frame: { x: 100, y: 100, width: 800, height: 400 },
   url: "views://control-ui/index.html",
-  titleBarStyle: "default",
+  titleBarStyle: "hidden",
   transparent: false,
   sandbox: false,
-  rpc: BrowserView.defineRPC<DiscatchRPCSchema>({
+  rpc: BrowserView.defineRPC<DiscaptureRPCSchema>({
     maxRequestTime: 600000,
     handlers: {
       requests: {
@@ -122,33 +126,18 @@ const win = new BrowserWindow({
             return { success: false };
           }
         },
+
+        closeWindow: async () => {
+          win.close();
+          return { success: true };
+        },
       },
       messages: {},
     },
   }),
 });
 
-// --- Application Menu ---
-ApplicationMenu.setApplicationMenu([
-  {
-    submenu: [{ label: "Quit Discatch", role: "quit" }],
-  },
-  {
-    label: "Edit",
-    submenu: [
-      { role: "undo" },
-      { role: "redo" },
-      { type: "separator" },
-      { role: "cut" },
-      { role: "copy" },
-      { role: "paste" },
-      { role: "selectAll" },
-    ],
-  },
-  {
-    label: "View",
-    submenu: [{ role: "reload" }],
-  },
-]);
+// --- Application Menu (empty — frameless window uses custom title bar) ---
+ApplicationMenu.setApplicationMenu([]);
 
-console.log("[bun] Discatch app started");
+console.log("[bun] Discapture app started");

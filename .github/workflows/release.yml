@@ -28,10 +28,10 @@ jobs:
       - name: Package artifact
         run: |
           cd build/release-win-x64
-          7z a -tzip ../../Discatch-win-x64.zip Discatch/
+          7z a -tzip ../../Discapture-win-x64.zip Discapture/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Discatch-win-x64.zip
+          files: Discapture-win-x64.zip
           generate_release_notes: true

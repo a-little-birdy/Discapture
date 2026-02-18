@@ -1,5 +1,5 @@
 #!/bin/bash
-# Full build script for Discatch on Windows
+# Full build script for Discapture on Windows
 # Creates the complete build directory from scratch, bypassing broken electrobun build
 
 set -e
@@ -14,9 +14,9 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$PROJECT_ROOT/node_modules/electrobun/dist-win-x64"
 
 if [ "$BUILD_ENV" = "release" ]; then
-  BUILD="$PROJECT_ROOT/build/release-win-x64/Discatch"
+  BUILD="$PROJECT_ROOT/build/release-win-x64/Discapture"
 else
-  BUILD="$PROJECT_ROOT/build/dev-win-x64/Discatch-dev"
+  BUILD="$PROJECT_ROOT/build/dev-win-x64/Discapture-dev"
 fi
 
 echo "[build] Environment: $BUILD_ENV | Version: $VERSION"
@@ -41,8 +41,8 @@ cat > "$BUILD/Resources/build.json" << 'ENDJSON'
 {
   "buildEnvironment": "dev",
   "app": {
-    "name": "Discatch",
-    "identifier": "dev.discatch.app",
+    "name": "Discapture",
+    "identifier": "dev.discapture.app",
     "version": "0.1.0"
   }
 }
