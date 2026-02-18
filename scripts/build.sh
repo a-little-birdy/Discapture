@@ -128,11 +128,19 @@ ENDJSON
 
 # --- Build app code ---
 echo "[build] Building bun-side code..."
-bun build "$PROJECT_ROOT/src/bun/index.ts" \
-  --outdir "$BUILD/Resources/app/bun" \
-  --target=bun \
-  --external electrobun/bun \
-  --external puppeteer-core
+if [ "$BUILD_ENV" = "release" ]; then
+  # Release: bundle everything — no node_modules in installed app
+  bun build "$PROJECT_ROOT/src/bun/index.ts" \
+    --outdir "$BUILD/Resources/app/bun" \
+    --target=bun
+else
+  # Dev: externalize deps resolved via node_modules
+  bun build "$PROJECT_ROOT/src/bun/index.ts" \
+    --outdir "$BUILD/Resources/app/bun" \
+    --target=bun \
+    --external electrobun/bun \
+    --external puppeteer-core
+fi
 
 echo "[build] Building view-side code..."
 bun build "$PROJECT_ROOT/src/control-ui/index.ts" \
