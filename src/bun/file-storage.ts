@@ -116,6 +116,7 @@ export class FileStorage {
       content: string;
       attachments: { url: string; localFile?: string }[];
       embeds: string[];
+      screenshots: string[];
     }>
   ): Promise<string> {
     if (session.format === "json") {
@@ -135,7 +136,7 @@ export class FileStorage {
       const logPath = join(session.outputDir, "messages.csv");
       const escapeCsv = (s: string) =>
         `"${s.replace(/"/g, '""').replace(/\n/g, "\\n")}"`;
-      const header = "id,author,timestamp,content,attachments,embeds\n";
+      const header = "id,author,timestamp,content,attachments,embeds,screenshots\n";
       const rows = messages
         .map((m) =>
           [
@@ -145,6 +146,7 @@ export class FileStorage {
             escapeCsv(m.content),
             escapeCsv(m.attachments.map((a) => a.localFile || a.url).join("; ")),
             escapeCsv(m.embeds.join("; ")),
+            escapeCsv(m.screenshots.join("; ")),
           ].join(",")
         )
         .join("\n");

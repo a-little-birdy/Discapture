@@ -16,8 +16,15 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*) PLATFORM="win" ;;
   Darwin)               PLATFORM="darwin" ;;
-  Linux)                PLATFORM="linux" ;;
-  *)                    echo "[build] Unsupported OS: $(uname -s)"; exit 1 ;;
+  Linux)
+    # Detect WSL (running on a Windows host)
+    if grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+      PLATFORM="win"
+    else
+      PLATFORM="linux"
+    fi
+    ;;
+  *)  echo "[build] Unsupported OS: $(uname -s)"; exit 1 ;;
 esac
 
 case "$(uname -m)" in
@@ -93,7 +100,13 @@ for file in "$DIST"/*; do
   fname="$(basename "$file")"
   case "$fname" in
     main.js|npmbin.js) continue ;;
-    launcher|launcher.exe) cp "$file" "$BUILD/bin/Discapture${BIN_EXT}" ;;
+    launcher|launcher.exe)
+      cp "$file" "$BUILD/bin/Discapture${BIN_EXT}"
+      # electrobun dev expects the original launcher name
+      if [ "$BUILD_ENV" != "release" ]; then
+        cp "$file" "$BUILD/bin/$fname"
+      fi
+      ;;
     *) cp "$file" "$BUILD/bin/$fname" ;;
   esac
 done

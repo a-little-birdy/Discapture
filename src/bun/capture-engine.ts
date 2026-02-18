@@ -15,6 +15,7 @@ interface ParsedMessage {
   content: string;
   attachments: Attachment[];
   embeds: string[];
+  screenshots: string[];
 }
 
 type ProgressCallback = (data: {
@@ -81,6 +82,7 @@ export class CaptureEngine {
   private screenshotCount = 0;
   private allMessages: ParsedMessage[] = [];
   private seenMessageIds = new Set<string>();
+  private messageScreenshots = new Map<string, Set<string>>();
 
   // Callbacks stored from setup so beginCapture can use them
   private sendProgress: ProgressCallback | null = null;
@@ -210,6 +212,7 @@ export class CaptureEngine {
     this.screenshotCount = 0;
     this.allMessages = [];
     this.seenMessageIds = new Set();
+    this.messageScreenshots = new Map();
 
     try {
       // Create output session
@@ -255,6 +258,18 @@ export class CaptureEngine {
           }
         }
       }
+
+      // Populate screenshot references on each message
+      for (const msg of this.allMessages) {
+        msg.screenshots = [...(this.messageScreenshots.get(msg.id) || [])];
+      }
+
+      // Sort messages by timestamp (oldest first)
+      this.allMessages.sort((a, b) => {
+        if (!a.timestamp) return -1;
+        if (!b.timestamp) return 1;
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      });
 
       // Save the log
       await this.storage.saveLog(this.session, this.allMessages);
@@ -316,11 +331,17 @@ export class CaptureEngine {
   private async parseVisibleMessages(): Promise<ParsedMessage[]> {
     if (!this.page) return [];
 
-    return await this.page.evaluate(() => {
+    const raw = await this.page.evaluate(() => {
       const chatArea =
         document.querySelector('[class*="chatContent_"]') ||
         document.querySelector('[class*="chat_"] > [class*="content_"]');
       if (!chatArea) return [];
+
+      // Get the scroll container's visible bounds to filter out off-screen messages
+      const scroller =
+        document.querySelector('[class*="managedReactiveScroller_"]') ||
+        chatArea;
+      const scrollerRect = scroller.getBoundingClientRect();
 
       const groups = chatArea.querySelectorAll('[id^="chat-messages-"]');
       const messages: Array<{
@@ -335,6 +356,11 @@ export class CaptureEngine {
       let currentTimestamp = "";
 
       groups.forEach((group) => {
+        // Skip messages not visible in the scroll viewport
+        const rect = group.getBoundingClientRect();
+        if (rect.bottom < scrollerRect.top || rect.top > scrollerRect.bottom) {
+          return;
+        }
         const usernameEl = group.querySelector('[class*="username_"]');
         const timeEl = group.querySelector("time");
 
@@ -386,6 +412,7 @@ export class CaptureEngine {
 
       return messages;
     });
+    return raw.map((m) => ({ ...m, screenshots: [] }));
   }
 
   private async takeScreenshot(): Promise<void> {
@@ -413,6 +440,18 @@ export class CaptureEngine {
         this.seenMessageIds.add(msg.id);
         this.allMessages.push(msg);
       }
+    }
+  }
+
+  private linkMessagesToScreenshot(messages: ParsedMessage[]): void {
+    const filename = `screenshots/screenshot-${String(this.screenshotCount).padStart(4, "0")}.png`;
+    for (const msg of messages) {
+      let set = this.messageScreenshots.get(msg.id);
+      if (!set) {
+        set = new Set();
+        this.messageScreenshots.set(msg.id, set);
+      }
+      set.add(filename);
     }
   }
 
@@ -472,6 +511,7 @@ export class CaptureEngine {
     const initialMessages = await this.parseVisibleMessages();
     this.accumulateMessages(initialMessages);
     await this.takeScreenshot();
+    this.linkMessagesToScreenshot(initialMessages);
 
     console.log(
       `[capture] Initial capture: ${initialMessages.length} visible, ${this.allMessages.length} total, screenshot #${this.screenshotCount}`
@@ -508,6 +548,7 @@ export class CaptureEngine {
       const messages = await this.parseVisibleMessages();
       this.accumulateMessages(messages);
       await this.takeScreenshot();
+      this.linkMessagesToScreenshot(messages);
 
       // 5. Check state after waiting
       const afterScroll = await this.getScrollState();
