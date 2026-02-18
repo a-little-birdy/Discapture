@@ -16,15 +16,15 @@ jobs:
           - os: windows-latest
             platform: win
             arch: x64
-            artifact: Discapture-win-x64.zip
+            artifact: Discapture-win-x64-setup.exe
           - os: macos-latest
             platform: darwin
             arch: arm64
-            artifact: Discapture-darwin-arm64.tar.gz
+            artifact: Discapture-darwin-arm64.dmg
           - os: ubuntu-latest
             platform: linux
             arch: x64
-            artifact: Discapture-linux-x64.tar.gz
+            artifact: discapture_amd64.deb
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -48,17 +48,87 @@ jobs:
         env:
           BUILD_ENV: release
 
-      - name: Package artifact (Windows)
+      # --- Windows: Inno Setup installer ---
+      - name: Build installer (Windows)
         if: matrix.platform == 'win'
         run: |
-          cd build/release-${{ matrix.platform }}-${{ matrix.arch }}
-          7z a -tzip ../../${{ matrix.artifact }} Discapture/
+          iscc //DAppVersion="${{ github.ref_name }}" //DBuildDir="build\release-win-x64\Discapture" //DOutputDir="." scripts\installer.iss
 
-      - name: Package artifact (macOS/Linux)
-        if: matrix.platform != 'win'
+      # --- macOS: .app bundle in .dmg ---
+      - name: Package .app bundle (macOS)
+        if: matrix.platform == 'darwin'
+        env:
+          APP_VERSION: ${{ github.ref_name }}
         run: |
-          cd build/release-${{ matrix.platform }}-${{ matrix.arch }}
-          tar -czf ../../${{ matrix.artifact }} Discapture/
+          VERSION="${APP_VERSION#v}"
+          APP="build/Discapture.app"
+          mkdir -p "$APP/Contents/MacOS"
+
+          cp -R build/release-darwin-arm64/Discapture/* "$APP/Contents/MacOS/"
+
+          cat > "$APP/Contents/Info.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key>
+            <string>Discapture</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.discapture.app</string>
+            <key>CFBundleVersion</key>
+            <string>${VERSION}</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${VERSION}</string>
+            <key>CFBundleExecutable</key>
+            <string>Discapture</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+          </dict>
+          </plist>
+          EOF
+
+          hdiutil create -volname "Discapture" -srcfolder "$APP" -ov -format UDZO "${{ matrix.artifact }}"
+
+      # --- Linux: .deb package ---
+      - name: Package .deb (Linux)
+        if: matrix.platform == 'linux'
+        env:
+          APP_VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${APP_VERSION#v}"
+          PKG="build/discapture_${VERSION}_amd64"
+
+          mkdir -p "$PKG/DEBIAN"
+          mkdir -p "$PKG/usr/lib/discapture"
+          mkdir -p "$PKG/usr/bin"
+          mkdir -p "$PKG/usr/share/applications"
+
+          cp -R build/release-linux-x64/Discapture/* "$PKG/usr/lib/discapture/"
+
+          ln -s /usr/lib/discapture/Discapture "$PKG/usr/bin/discapture"
+
+          cat > "$PKG/usr/share/applications/discapture.desktop" << EOF
+          [Desktop Entry]
+          Name=Discapture
+          Comment=Discord chat capture and archival tool
+          Exec=/usr/lib/discapture/Discapture
+          Type=Application
+          Categories=Utility;
+          EOF
+
+          cat > "$PKG/DEBIAN/control" << EOF
+          Package: discapture
+          Version: ${VERSION}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: libwebkit2gtk-4.1-0, libgtk-3-0
+          Maintainer: Discapture
+          Description: Discord chat capture and archival tool
+          EOF
+
+          dpkg-deb --build "$PKG"
+          mv "${PKG}.deb" "${{ matrix.artifact }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

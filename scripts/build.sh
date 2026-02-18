@@ -74,22 +74,33 @@ else
 fi
 
 echo "[build] Creating build directory structure..."
-mkdir -p "$BUILD/bin"
 mkdir -p "$BUILD/Resources/app/bun"
 mkdir -p "$BUILD/Resources/app/views/control-ui"
 
-# --- Copy platform binaries ---
+# --- Determine platform-specific binary extension ---
+if [ "$PLATFORM" = "win" ]; then
+  BIN_EXT=".exe"
+else
+  BIN_EXT=""
+fi
+
+# --- Copy platform binaries to app root (flat layout) ---
 echo "[build] Copying platform binaries..."
-# Copy all root-level files from dist to bin/ (executables, libraries)
-# except main.js and npmbin.js which go elsewhere
 for file in "$DIST"/*; do
   [ ! -f "$file" ] && continue
   fname="$(basename "$file")"
   case "$fname" in
     main.js|npmbin.js) continue ;;
-    *) cp "$file" "$BUILD/bin/$fname" ;;
+    # Rename launcher to Discapture so users know what to run
+    launcher|launcher.exe) cp "$file" "$BUILD/Discapture${BIN_EXT}" ;;
+    *) cp "$file" "$BUILD/$fname" ;;
   esac
 done
+
+# Make the launcher executable on Unix
+if [ "$PLATFORM" != "win" ]; then
+  chmod +x "$BUILD/Discapture"
+fi
 
 # --- Copy main.js (electrobun launcher entrypoint) ---
 cp "$DIST/main.js" "$BUILD/Resources/main.js"
