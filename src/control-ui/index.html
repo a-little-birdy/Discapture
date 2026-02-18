@@ -8,6 +8,7 @@
   </head>
   <body>
     <div id="title-bar" class="electrobun-webkit-app-region-drag">
+      <button id="btn-settings" class="electrobun-webkit-app-region-no-drag" aria-label="Settings">&#9881;</button>
       <button id="btn-close" class="electrobun-webkit-app-region-no-drag" aria-label="Close">&times;</button>
     </div>
     <div id="app">
@@ -26,6 +27,21 @@
           </div>
         </div>
         <p class="hint">Opens a browser window with Discord. Your login persists between sessions.</p>
+      </section>
+
+      <!-- Settings panel -->
+      <section id="phase-settings" class="phase hidden">
+        <h1>Settings</h1>
+        <div class="settings-group">
+          <label for="setting-output-dir">Output directory</label>
+          <div class="input-row">
+            <input type="text" id="setting-output-dir" readonly />
+            <button id="btn-browse" class="btn-sm">Browse</button>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="btn-settings-back" class="btn-primary btn-lg">Back</button>
+        </div>
       </section>
 
       <!-- Phase: connecting -->

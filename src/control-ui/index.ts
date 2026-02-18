@@ -25,6 +25,18 @@ interface DiscaptureRPCSchema extends ElectrobunRPCSchema {
         params: { path: string };
         response: { success: boolean };
       };
+      getSettings: {
+        params: undefined;
+        response: { outputDir: string };
+      };
+      saveSettings: {
+        params: { outputDir: string };
+        response: { success: boolean };
+      };
+      browseFolder: {
+        params: undefined;
+        response: { path: string | null };
+      };
       closeWindow: {
         params: undefined;
         response: { success: boolean };
@@ -56,7 +68,7 @@ interface DiscaptureRPCSchema extends ElectrobunRPCSchema {
 
 // --- Phase management ---
 
-const phases = ["idle", "connecting", "ready", "recording", "done"] as const;
+const phases = ["idle", "connecting", "ready", "recording", "done", "settings"] as const;
 
 function showPhase(id: typeof phases[number]) {
   for (const p of phases) {
@@ -81,6 +93,10 @@ const doneSs = document.getElementById("done-ss") as HTMLElement;
 const donePath = document.getElementById("done-path") as HTMLParagraphElement;
 const btnOpenFolder = document.getElementById("btn-open-folder") as HTMLButtonElement;
 const btnClose = document.getElementById("btn-close") as HTMLButtonElement;
+const btnSettings = document.getElementById("btn-settings") as HTMLButtonElement;
+const btnBrowse = document.getElementById("btn-browse") as HTMLButtonElement;
+const btnSettingsBack = document.getElementById("btn-settings-back") as HTMLButtonElement;
+const settingOutputDir = document.getElementById("setting-output-dir") as HTMLInputElement;
 
 // --- Initialize Electroview with RPC ---
 
@@ -167,4 +183,26 @@ btnOpenFolder.addEventListener("click", async () => {
 
 btnClose.addEventListener("click", async () => {
   await electrobun.rpc?.request.closeWindow();
+});
+
+// --- Settings handlers ---
+
+btnSettings.addEventListener("click", async () => {
+  const result = await electrobun.rpc?.request.getSettings();
+  if (result) {
+    settingOutputDir.value = result.outputDir;
+  }
+  showPhase("settings");
+});
+
+btnBrowse.addEventListener("click", async () => {
+  const result = await electrobun.rpc?.request.browseFolder();
+  if (result?.path) {
+    settingOutputDir.value = result.path;
+    await electrobun.rpc?.request.saveSettings({ outputDir: result.path });
+  }
+});
+
+btnSettingsBack.addEventListener("click", () => {
+  showPhase("idle");
 });

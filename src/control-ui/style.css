@@ -26,7 +26,8 @@ body {
   z-index: 100;
 }
 
-#btn-close {
+#btn-close,
+#btn-settings {
   width: 36px;
   height: 32px;
   border: none;
@@ -43,6 +44,15 @@ body {
 #btn-close:hover {
   background: #e94560;
   color: white;
+}
+
+#btn-settings {
+  font-size: 15px;
+}
+
+#btn-settings:hover {
+  background: #333;
+  color: #e0e0e0;
 }
 
 #app {
@@ -238,6 +248,54 @@ select {
   font-size: 11px;
   color: #555;
   word-break: break-all;
+}
+
+/* --- Settings --- */
+
+.settings-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.settings-group label {
+  font-size: 12px;
+  color: #888;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.input-row input[type="text"] {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.btn-sm {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #333;
+  color: #e0e0e0;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.btn-sm:hover {
+  background: #444;
 }
 
 /* --- Animations --- */

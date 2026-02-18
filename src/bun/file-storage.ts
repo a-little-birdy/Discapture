@@ -11,9 +11,17 @@ export interface CaptureSession {
 export class FileStorage {
   private baseDir: string;
 
-  constructor() {
-    const homeDir = process.env.USERPROFILE || process.env.HOME || ".";
-    this.baseDir = join(homeDir, "Documents", "Discapture", "captures");
+  constructor(baseDir?: string) {
+    if (baseDir) {
+      this.baseDir = baseDir;
+    } else {
+      const homeDir = process.env.USERPROFILE || process.env.HOME || ".";
+      this.baseDir = join(homeDir, "Documents", "Discapture", "captures");
+    }
+  }
+
+  setBaseDir(dir: string) {
+    this.baseDir = dir;
   }
 
   createSession(format: string): CaptureSession {

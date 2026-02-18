@@ -7,6 +7,7 @@ import {
 } from "electrobun/bun";
 import { CaptureEngine } from "./capture-engine";
 import { FileStorage } from "./file-storage";
+import { loadSettings, saveSettings as persistSettings } from "./settings";
 
 // --- RPC Schema ---
 
@@ -28,6 +29,18 @@ interface DiscaptureRPCSchema extends ElectrobunRPCSchema {
       openFolder: {
         params: { path: string };
         response: { success: boolean };
+      };
+      getSettings: {
+        params: undefined;
+        response: { outputDir: string };
+      };
+      saveSettings: {
+        params: { outputDir: string };
+        response: { success: boolean };
+      };
+      browseFolder: {
+        params: undefined;
+        response: { path: string | null };
       };
       closeWindow: {
         params: undefined;
@@ -58,8 +71,9 @@ interface DiscaptureRPCSchema extends ElectrobunRPCSchema {
   }>;
 }
 
-// --- Initialize storage and capture engine ---
-const storage = new FileStorage();
+// --- Initialize settings, storage and capture engine ---
+const settings = loadSettings();
+const storage = new FileStorage(settings.outputDir);
 const engine = new CaptureEngine(storage);
 
 // --- Create the main window ---
@@ -124,6 +138,34 @@ const win = new BrowserWindow({
             return { success: true };
           } catch {
             return { success: false };
+          }
+        },
+
+        getSettings: async () => {
+          const current = loadSettings();
+          return { outputDir: current.outputDir };
+        },
+
+        saveSettings: async (params) => {
+          if (!params) return { success: false };
+          persistSettings({ outputDir: params.outputDir });
+          storage.setBaseDir(params.outputDir);
+          return { success: true };
+        },
+
+        browseFolder: async () => {
+          try {
+            const ps = Bun.spawn([
+              "powershell.exe",
+              "-NoProfile",
+              "-Command",
+              `Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select output directory'; if ($f.ShowDialog() -eq 'OK') { $f.SelectedPath } else { '' }`,
+            ]);
+            const text = await new Response(ps.stdout).text();
+            const selected = text.trim();
+            return { path: selected || null };
+          } catch {
+            return { path: null };
           }
         },
 
