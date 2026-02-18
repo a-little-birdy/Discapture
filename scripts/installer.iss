@@ -6,7 +6,7 @@ AppVersion={#AppVersion}
 AppPublisher=Discapture
 DefaultDirName={autopf}\Discapture
 DefaultGroupName=Discapture
-UninstallDisplayIcon={app}\Discapture.exe
+UninstallDisplayIcon={app}\bin\Discapture.exe
 OutputDir={#Root}\{#OutputDir}
 OutputBaseFilename=Discapture-win-x64-setup
 Compression=lzma2
@@ -18,9 +18,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Source: "{#Root}\{#BuildDir}\*"; DestDir: "{app}"; Flags: recursesubdirs
 
 [Icons]
-Name: "{group}\Discapture"; Filename: "{app}\Discapture.exe"
+Name: "{group}\Discapture"; Filename: "{app}\bin\Discapture.exe"
 Name: "{group}\Uninstall Discapture"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Discapture"; Filename: "{app}\Discapture.exe"; Tasks: desktopicon
+Name: "{autodesktop}\Discapture"; Filename: "{app}\bin\Discapture.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"

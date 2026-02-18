@@ -74,6 +74,7 @@ else
 fi
 
 echo "[build] Creating build directory structure..."
+mkdir -p "$BUILD/bin"
 mkdir -p "$BUILD/Resources/app/bun"
 mkdir -p "$BUILD/Resources/app/views/control-ui"
 
@@ -84,22 +85,22 @@ else
   BIN_EXT=""
 fi
 
-# --- Copy platform binaries to app root (flat layout) ---
+# --- Copy platform binaries into bin/ ---
+# The launcher expects ../Resources/ relative to its location, so it must be in a subdirectory
 echo "[build] Copying platform binaries..."
 for file in "$DIST"/*; do
   [ ! -f "$file" ] && continue
   fname="$(basename "$file")"
   case "$fname" in
     main.js|npmbin.js) continue ;;
-    # Rename launcher to Discapture so users know what to run
-    launcher|launcher.exe) cp "$file" "$BUILD/Discapture${BIN_EXT}" ;;
-    *) cp "$file" "$BUILD/$fname" ;;
+    launcher|launcher.exe) cp "$file" "$BUILD/bin/Discapture${BIN_EXT}" ;;
+    *) cp "$file" "$BUILD/bin/$fname" ;;
   esac
 done
 
 # Make the launcher executable on Unix
 if [ "$PLATFORM" != "win" ]; then
-  chmod +x "$BUILD/Discapture"
+  chmod +x "$BUILD/bin/Discapture"
 fi
 
 # --- Copy main.js (electrobun launcher entrypoint) ---
