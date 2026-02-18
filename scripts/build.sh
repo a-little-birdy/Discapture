@@ -31,7 +31,7 @@ if [ "$PLATFORM" = "win" ]; then
   ARCH="x64"
 fi
 
-ELECTROBUN_VERSION="$(node -p "require('$PROJECT_ROOT/node_modules/electrobun/package.json').version")"
+ELECTROBUN_VERSION="$(node -p "require('./node_modules/electrobun/package.json').version")"
 DIST="$PROJECT_ROOT/node_modules/electrobun/dist-${PLATFORM}-${ARCH}"
 
 echo "[build] Environment: $BUILD_ENV | Version: $VERSION"
