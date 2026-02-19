@@ -6,6 +6,8 @@
 
 Discord chat capture and archival tool. Discapture opens Discord in a browser window, lets you navigate to any channel, then scrolls through the entire chat history -- capturing every message, screenshot, and attachment along the way.
 
+<video src="assets/demo.mp4" controls width="100%"></video>
+
 ## How it works
 
 1. **Open Discord** -- Discapture launches Chrome or Edge with a persistent profile so your Discord login carries over between sessions.

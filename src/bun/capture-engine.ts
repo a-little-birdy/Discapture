@@ -149,6 +149,14 @@ export class CaptureEngine {
         ],
       });
 
+      // Clean up references if the user closes the browser window
+      this.browser.on("disconnected", () => {
+        console.log("[capture] Browser disconnected");
+        this.browser = null;
+        this.page = null;
+        this.isRunning = false;
+      });
+
       const pages = await this.browser.pages();
       this.page = pages[0] || (await this.browser.newPage());
 
