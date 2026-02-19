@@ -423,8 +423,31 @@ export class CaptureEngine {
     return raw.map((m) => ({ ...m, screenshots: [] }));
   }
 
+  private async revealSpoilers(): Promise<void> {
+    if (!this.page) return;
+
+    const count = await this.page.evaluate(() => {
+      const spoilers = document.querySelectorAll('[aria-label="Spoiler"]');
+      spoilers.forEach((el) => (el as HTMLElement).click());
+
+      // Remove "Jump to Present" bar so it doesn't appear in screenshots
+      document
+        .querySelectorAll('[class*="jumpToPresentBar_"]')
+        .forEach((el) => el.remove());
+
+      return spoilers.length;
+    });
+
+    if (count > 0) {
+      console.log(`[capture] Revealed ${count} spoiler(s)`);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+
   private async takeScreenshot(): Promise<void> {
     if (!this.page || !this.session) return;
+
+    await this.revealSpoilers();
 
     this.screenshotCount++;
     const screenshotPath = join(
