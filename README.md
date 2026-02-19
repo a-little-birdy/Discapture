@@ -4,9 +4,11 @@
 
 # Discapture
 
-Discord chat capture and archival tool. Discapture opens Discord in a browser window, lets you navigate to any channel, then scrolls through the entire chat history -- capturing every message, screenshot, and attachment along the way.
 
-<video src="assets/demo.mp4" controls width="100%"></video>
+
+
+https://github.com/user-attachments/assets/eaded00d-e3e5-4c3c-a5a8-4f6a83dcadff
+
 
 ## How it works
 
