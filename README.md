@@ -20,9 +20,8 @@ A small control panel window stays open alongside the browser to show live progr
 ## Requirements
 
 - **Google Chrome** or **Microsoft Edge** -- must already be installed on your system. Discapture does not bundle a browser. It searches standard installation paths automatically.
-- **Bun** v1.0 or later -- [Install Bun](https://bun.sh)
 - **Operating system** -- Windows 10+, macOS 10.13+, or Linux (x64 or arm64)
-- **Discord account** -- you need to be logged in to Discord in the browser window that Discapture opens
+- **Discord account** -- you will need to log into discord in the opened window
 
 ## Download
 
