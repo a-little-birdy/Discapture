@@ -165,4 +165,48 @@ echo "[build] Copying static assets..."
 cp "$PROJECT_ROOT/src/control-ui/index.html" "$BUILD/Resources/app/views/control-ui/index.html"
 cp "$PROJECT_ROOT/src/control-ui/style.css" "$BUILD/Resources/app/views/control-ui/style.css"
 
+# --- Set application icon ---
+ICON_SRC="$PROJECT_ROOT/src/assets/logo.png"
+
+# Helper: convert Unix paths to Windows paths (works in WSL, Git Bash, and MSYS2)
+to_win_path() {
+  cygpath -w "$1" 2>/dev/null || wslpath -w "$1" 2>/dev/null || echo "$1"
+}
+
+if [ -f "$ICON_SRC" ]; then
+  if [ "$PLATFORM" = "win" ]; then
+    echo "[build] Setting Windows application icon..."
+    ICO_SRC="$PROJECT_ROOT/src/assets/logo.ico"
+    ICO_PATH="$BUILD/Resources/app.ico"
+    if [ -f "$ICO_SRC" ]; then
+      cp "$ICO_SRC" "$ICO_PATH"
+      # Embed ICO into exes by calling rcedit-x64.exe directly (bypasses cross-spawn-windows-exe
+      # normalizePath which mangles Windows paths in WSL)
+      RCEDIT_BIN="$PROJECT_ROOT/node_modules/rcedit/bin/rcedit-x64.exe"
+      if [ -f "$RCEDIT_BIN" ]; then
+        WIN_ICO="$(to_win_path "$ICO_PATH")"
+        for exe in "$BUILD/bin/Discapture.exe" "$BUILD/bin/launcher.exe" "$BUILD/bin/bun.exe"; do
+          if [ -f "$exe" ]; then
+            WIN_EXE="$(to_win_path "$exe")"
+            "$RCEDIT_BIN" "$WIN_EXE" --set-icon "$WIN_ICO" \
+              && echo "[build] Icon embedded in $(basename "$exe")" \
+              || echo "[build] rcedit failed for $(basename "$exe")"
+          fi
+        done
+      else
+        echo "[build] rcedit binary not found, skipping icon embedding"
+      fi
+    else
+      echo "[build] No ICO found at src/assets/logo.ico -- run: node -e \"require('png-to-ico')('src/assets/logo.png').then(b=>require('fs').writeFileSync('src/assets/logo.ico',b))\""
+    fi
+    # Also copy PNG for runtime setWindowIcon
+    cp "$ICON_SRC" "$BUILD/Resources/app-icon.png"
+  elif [ "$PLATFORM" = "linux" ]; then
+    echo "[build] Copying Linux application icon..."
+    cp "$ICON_SRC" "$BUILD/Resources/appIcon.png"
+  fi
+else
+  echo "[build] No icon found at src/assets/logo.png, skipping"
+fi
+
 echo "[build] Done! Build at: $BUILD"

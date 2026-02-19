@@ -20,5 +20,11 @@ export default {
       "src/control-ui/index.html": "views/control-ui/index.html",
       "src/control-ui/style.css": "views/control-ui/style.css",
     },
+    win: {
+      icon: "src/assets/logo.png",
+    },
+    linux: {
+      icon: "src/assets/logo.png",
+    },
   },
 } satisfies ElectrobunConfig;

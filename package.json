@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "build": "bash scripts/build.sh",
-    "dev": "bash scripts/build.sh && electrobun dev",
+    "dev": "electrobun dev",
     "start": "bash scripts/build.sh && electrobun dev"
   },
   "dependencies": {

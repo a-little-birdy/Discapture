@@ -5,6 +5,8 @@ import {
   type ElectrobunRPCSchema,
   type RPCSchema,
 } from "electrobun/bun";
+import { dlopen, FFIType, ptr } from "bun:ffi";
+import { resolve } from "path";
 import { CaptureEngine } from "./capture-engine";
 import { FileStorage } from "./file-storage";
 import { loadSettings, saveSettings as persistSettings } from "./settings";
@@ -178,6 +180,50 @@ const win = new BrowserWindow({
     },
   }),
 });
+
+// --- Set window icon (Win32 API) ---
+if (process.platform === "win32") {
+  try {
+    const icoPath = resolve("../Resources/app.ico");
+    if (await Bun.file(icoPath).exists()) {
+      const user32 = dlopen("user32.dll", {
+        LoadImageA: {
+          args: [FFIType.ptr, FFIType.cstring, FFIType.u32, FFIType.i32, FFIType.i32, FFIType.u32],
+          returns: FFIType.ptr,
+        },
+        SendMessageA: {
+          args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.ptr],
+          returns: FFIType.i64,
+        },
+      });
+
+      const IMAGE_ICON = 1;
+      const LR_LOADFROMFILE = 0x0010;
+      const LR_DEFAULTSIZE = 0x0040;
+      const WM_SETICON = 0x0080;
+      const ICON_SMALL = 0;
+      const ICON_BIG = 1;
+
+      const pathBuf = Buffer.from(icoPath + "\0", "utf8");
+      const hIcon = user32.symbols.LoadImageA(
+        null, ptr(pathBuf), IMAGE_ICON, 0, 0,
+        LR_LOADFROMFILE | LR_DEFAULTSIZE
+      );
+
+      if (hIcon) {
+        user32.symbols.SendMessageA(win.ptr, WM_SETICON, ICON_BIG, hIcon);
+        user32.symbols.SendMessageA(win.ptr, WM_SETICON, ICON_SMALL, hIcon);
+        console.log("[bun] Window icon set via Win32 SendMessage");
+      } else {
+        console.log("[bun] LoadImageA failed to load icon from", icoPath);
+      }
+    } else {
+      console.log("[bun] No icon found at", icoPath);
+    }
+  } catch (err: any) {
+    console.log("[bun] Could not set window icon:", err.message);
+  }
+}
 
 // --- Application Menu (empty — frameless window uses custom title bar) ---
 ApplicationMenu.setApplicationMenu([]);
