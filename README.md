@@ -39,11 +39,7 @@ bun install
 
 ## Usage
 
-```sh
-bun run dev
-```
-
-This builds the app and launches the Electrobun dev server. The control panel window will open. From there:
+Open the app after installation and follow these steps
 
 1. Choose your output format (JSON or CSV).
 2. Click **Open Discord**.
