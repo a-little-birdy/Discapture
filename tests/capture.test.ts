@@ -10,13 +10,18 @@ import expected from "./fixtures/expected-messages.json";
 
 let browser: Browser;
 
+// First Chrome launch on a cold CI runner can take longer than bun
+// test's 5 s default. Per-test timeout is bumped via the CLI flag in
+// package.json / CI step.
+const HOOK_TIMEOUT_MS = 60_000;
+
 beforeAll(async () => {
   browser = await launchTestBrowser();
-});
+}, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
   await browser?.close();
-});
+}, HOOK_TIMEOUT_MS);
 
 async function loadFixture(query: string = ""): Promise<Page> {
   const page = await browser.newPage();
