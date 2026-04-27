@@ -5,6 +5,7 @@ node_modules
 out
 dist
 build
+artifacts
 *.tgz
 
 # code coverage
@@ -30,6 +31,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # IntelliJ based IDEs
 .idea
+
+# Claude Code local settings (per-developer)
+.claude/settings.local.json
 
 # Finder (MacOS) folder config
 .DS_Store

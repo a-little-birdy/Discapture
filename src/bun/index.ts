@@ -6,10 +6,39 @@ import {
   type RPCSchema,
 } from "electrobun/bun";
 import { dlopen, FFIType, ptr } from "bun:ffi";
-import { resolve } from "path";
+import { resolve, join } from "path";
+import { mkdirSync, createWriteStream, readdirSync, statSync, unlinkSync } from "fs";
+import { homedir } from "os";
 import { CaptureEngine } from "./capture-engine";
 import { FileStorage } from "./file-storage";
 import { loadSettings, saveSettings as persistSettings } from "./settings";
+
+// --- Redirect stdout/stderr to a log file. The launcher runs bun via
+// CreateProcessW with CREATE_NO_WINDOW, so there's no attached console
+// for native writes; without redirection, console.log output is lost. ---
+const logsDir = join(homedir(), "Documents", "Discapture", "logs");
+try {
+  mkdirSync(logsDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const logStream = createWriteStream(join(logsDir, `discapture-${stamp}.log`), {
+    flags: "a",
+  });
+  const writeToLog = ((chunk: any) => {
+    try { logStream.write(chunk); } catch {}
+    return true;
+  }) as typeof process.stdout.write;
+  process.stdout.write = writeToLog;
+  process.stderr.write = writeToLog;
+
+  // Prune logs older than 7 days
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  for (const f of readdirSync(logsDir)) {
+    const p = join(logsDir, f);
+    try {
+      if (statSync(p).mtimeMs < cutoff) unlinkSync(p);
+    } catch {}
+  }
+} catch {}
 
 // --- RPC Schema ---
 

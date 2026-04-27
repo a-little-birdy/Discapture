@@ -1,13 +1,18 @@
 #define Root SourcePath + "\.."
 
 [Setup]
+; AppId pinned to "Discapture" — matches the implicit AppId Inno derived
+; from AppName in the v0.1.0 installer, so this version upgrades the
+; existing install in-place instead of leaving an orphaned uninstall
+; entry. Do not change.
+AppId=Discapture
 AppName=Discapture
 AppVersion={#AppVersion}
 AppPublisher=Discapture
 DefaultDirName={localappdata}\Discapture
 PrivilegesRequired=lowest
 DefaultGroupName=Discapture
-UninstallDisplayIcon={app}\bin\Discapture.exe
+UninstallDisplayIcon={app}\bin\launcher.exe
 OutputDir={#Root}\{#OutputDir}
 OutputBaseFilename=Discapture-win-x64-setup
 Compression=lzma2
@@ -19,9 +24,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Source: "{#Root}\{#BuildDir}\*"; DestDir: "{app}"; Flags: recursesubdirs
 
 [Icons]
-Name: "{group}\Discapture"; Filename: "{app}\bin\Discapture.exe"
+Name: "{group}\Discapture"; Filename: "{app}\bin\launcher.exe"
 Name: "{group}\Uninstall Discapture"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Discapture"; Filename: "{app}\bin\Discapture.exe"; Tasks: desktopicon
+Name: "{autodesktop}\Discapture"; Filename: "{app}\bin\launcher.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"

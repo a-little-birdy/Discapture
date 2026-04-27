@@ -21,7 +21,7 @@ export default {
       "src/control-ui/style.css": "views/control-ui/style.css",
     },
     win: {
-      icon: "src/assets/logo.png",
+      icon: "src/assets/logo.ico",
     },
     linux: {
       icon: "src/assets/logo.png",
