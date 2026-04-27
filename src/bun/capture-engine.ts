@@ -2,6 +2,7 @@ import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { FileStorage, type CaptureSession } from "./file-storage";
 import { join } from "path";
 import { existsSync } from "fs";
+import { rename } from "fs/promises";
 import {
   parseVisibleMessagesFromDOM,
   isViewportRendered,
@@ -241,6 +242,10 @@ export class CaptureEngine {
       // Run the capture loop
       await this.captureLoop(sendProgress);
 
+      // Reverse screenshot numbering: capture goes newest->oldest (PageUp),
+      // but readers expect lowest index = oldest, highest = newest.
+      await this.reverseScreenshotOrder();
+
       // Download attachments and map URLs to local files
       const allUrls = [
         ...new Set(this.allMessages.flatMap((m) => m.attachments.map((a) => a.url))),
@@ -305,6 +310,11 @@ export class CaptureEngine {
 
       // Save whatever we have so far
       if (this.session && this.allMessages.length > 0) {
+        try {
+          await this.reverseScreenshotOrder();
+        } catch (e: any) {
+          console.log(`[capture] Reverse-order failed on partial save: ${e.message}`);
+        }
         await this.storage.saveLog(this.session, this.allMessages);
         console.log(
           `[capture] Partial log saved: ${this.allMessages.length} messages`
@@ -400,6 +410,41 @@ export class CaptureEngine {
         this.seenMessageIds.add(msg.id);
         this.allMessages.push(msg);
       }
+    }
+  }
+
+  private async reverseScreenshotOrder(): Promise<void> {
+    if (!this.session || this.screenshotCount === 0) return;
+    const dir = join(this.session.outputDir, "screenshots");
+    const total = this.screenshotCount;
+    const pad = (n: number) => String(n).padStart(4, "0");
+
+    // Two-pass rename via temp suffix to avoid collisions
+    for (let i = 1; i <= total; i++) {
+      const oldPath = join(dir, `screenshot-${pad(i)}.png`);
+      const tmpPath = join(dir, `screenshot-${pad(i)}.png.tmp`);
+      if (existsSync(oldPath)) await rename(oldPath, tmpPath);
+    }
+    for (let i = 1; i <= total; i++) {
+      const tmpPath = join(dir, `screenshot-${pad(i)}.png.tmp`);
+      const newIdx = total - i + 1;
+      const newPath = join(dir, `screenshot-${pad(newIdx)}.png`);
+      if (existsSync(tmpPath)) await rename(tmpPath, newPath);
+    }
+
+    // Remap messageScreenshots to new filenames
+    for (const [msgId, set] of this.messageScreenshots) {
+      const remapped = new Set<string>();
+      for (const f of set) {
+        const m = f.match(/screenshot-(\d+)\.png$/);
+        if (m) {
+          const newIdx = total - parseInt(m[1], 10) + 1;
+          remapped.add(`screenshots/screenshot-${pad(newIdx)}.png`);
+        } else {
+          remapped.add(f);
+        }
+      }
+      this.messageScreenshots.set(msgId, remapped);
     }
   }
 
