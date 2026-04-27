@@ -2,6 +2,11 @@ import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { FileStorage, type CaptureSession } from "./file-storage";
 import { join } from "path";
 import { existsSync } from "fs";
+import {
+  parseVisibleMessagesFromDOM,
+  isViewportRendered,
+  stripChromeAndRevealSpoilers,
+} from "./dom";
 
 interface Attachment {
   url: string;
@@ -339,152 +344,28 @@ export class CaptureEngine {
   private async parseVisibleMessages(): Promise<ParsedMessage[]> {
     if (!this.page) return [];
 
-    const raw = await this.page.evaluate(() => {
-      const chatArea =
-        document.querySelector('[class*="chatContent_"]') ||
-        document.querySelector('[class*="chat_"] > [class*="content_"]');
-      if (!chatArea) return [];
-
-      // Get the scroll container's visible bounds to filter out off-screen messages
-      const scroller =
-        document.querySelector('[class*="managedReactiveScroller_"]') ||
-        chatArea;
-      const scrollerRect = scroller.getBoundingClientRect();
-
-      const groups = chatArea.querySelectorAll('[id^="chat-messages-"]');
-      const messages: Array<{
-        id: string;
-        author: string;
-        timestamp: string;
-        content: string;
-        attachments: { url: string }[];
-        embeds: string[];
-      }> = [];
-      let currentAuthor = "";
-      let currentTimestamp = "";
-
-      groups.forEach((group) => {
-        // Skip messages not visible in the scroll viewport
-        const rect = group.getBoundingClientRect();
-        if (rect.bottom < scrollerRect.top || rect.top > scrollerRect.bottom) {
-          return;
-        }
-        const usernameEl = group.querySelector('[class*="username_"]');
-        const timeEl = group.querySelector("time");
-
-        if (usernameEl)
-          currentAuthor = usernameEl.textContent?.trim() || currentAuthor;
-        if (timeEl)
-          currentTimestamp =
-            timeEl.getAttribute("datetime") ||
-            timeEl.textContent?.trim() ||
-            currentTimestamp;
-
-        const contentEl = group.querySelector('[id^="message-content-"]');
-        const content = contentEl?.textContent?.trim() || "";
-
-        const urls: string[] = [];
-        const pushUrl = (u: string) => {
-          if (u && !urls.includes(u)) urls.push(u);
-        };
-
-        // Anchor links to Discord-hosted attachments and the file-name
-        // link variant used for non-image uploads.
-        group
-          .querySelectorAll(
-            'a[href*="cdn.discordapp.com"], a[href*="media.discordapp.net"], a[class*="fileNameLink_"]'
-          )
-          .forEach((a: Element) => {
-            pushUrl((a as HTMLAnchorElement).href || a.getAttribute("href") || "");
-          });
-
-        // Inline images in attachment / image wrappers, plus images
-        // inside embeds (covers static GIPHY-style gif embeds).
-        group
-          .querySelectorAll(
-            '[class*="imageWrapper_"] img, [class*="attachment_"] img, [class*="embedWrapper_"] img'
-          )
-          .forEach((img: Element) => {
-            pushUrl((img as HTMLImageElement).src);
-          });
-
-        // <video> tags inside the message group: Tenor/GIPHY animated
-        // GIFs are rendered as autoplay videos pointing at .mp4, and
-        // native video uploads appear here too. Avatars and emoji are
-        // <img>, not <video>, so this scope is safe.
-        group.querySelectorAll("video").forEach((v: Element) => {
-          const vid = v as HTMLVideoElement;
-          pushUrl(vid.src);
-          pushUrl(vid.currentSrc);
-          v.querySelectorAll("source").forEach((s: Element) => {
-            pushUrl(s.getAttribute("src") || "");
-          });
-        });
-
-        const embeds: string[] = [];
-        group.querySelectorAll('[class*="embedWrapper_"]').forEach((e: Element) => {
-          const text = e.textContent?.trim() || "";
-          if (text) embeds.push(text);
-        });
-
-        messages.push({
-          id:
-            group.id ||
-            `${currentAuthor}-${currentTimestamp}-${content.slice(0, 50)}`,
-          author: currentAuthor,
-          timestamp: currentTimestamp,
-          content,
-          attachments: urls.map((url) => ({ url })),
-          embeds,
-        });
-      });
-
-      return messages;
-    });
+    // Inject the function source into the page and invoke against
+    // the page's `document`. (Direct function-form `evaluate` can't
+    // accept a Document arg from Node-land; string form bridges.)
+    const raw = (await this.page.evaluate(
+      `(${parseVisibleMessagesFromDOM.toString()})(document)`
+    )) as Array<{
+      id: string;
+      author: string;
+      timestamp: string;
+      content: string;
+      attachments: { url: string }[];
+      embeds: string[];
+    }>;
     return raw.map((m) => ({ ...m, screenshots: [] }));
   }
 
   private async revealSpoilers(): Promise<void> {
     if (!this.page) return;
 
-    const count = await this.page.evaluate(() => {
-      const spoilers = document.querySelectorAll('[aria-label="Spoiler"]');
-      spoilers.forEach((el) => (el as HTMLElement).click());
-
-      // Remove "Jump to Present" bar so it doesn't appear in screenshots
-      document
-        .querySelectorAll('[class*="jumpToPresentBar_"]')
-        .forEach((el) => el.remove());
-
-      // Remove the typing indicator ("X is typing...") at the bottom
-      // of the channel — its presence depends on real-time activity
-      // and shouldn't bleed into archived screenshots.
-      // Match both the modern CSS-modules form `typing_` and the older
-      // hash form `typing-`, then verify by text content so we don't
-      // strip something that merely happens to contain "typing" in
-      // its class name.
-      document
-        .querySelectorAll('[class*="typing_"], [class^="typing-"]')
-        .forEach((el) => {
-          const txt = (el.textContent || "").toLowerCase();
-          if (txt.includes("typing")) el.remove();
-        });
-
-      // Remove the "N new messages since ..." unread bar. The span
-      // has id^="NewMessagesBarJumpToNewMessages_" — walk up to the
-      // nearest clickable ancestor (the whole bar is a button) and
-      // strip that. Fall back to the span itself if no wrapper found.
-      document
-        .querySelectorAll('[id^="NewMessagesBarJumpToNewMessages_"]')
-        .forEach((span) => {
-          const bar = span.closest(
-            'button, [role="button"], [class*="bar_"], [class*="Bar_"]'
-          );
-          (bar || span).remove();
-        });
-
-      return spoilers.length;
-    });
+    const count = (await this.page.evaluate(
+      `(${stripChromeAndRevealSpoilers.toString()})(document)`
+    )) as number;
 
     if (count > 0) {
       console.log(`[capture] Revealed ${count} spoiler(s)`);
@@ -534,73 +415,15 @@ export class CaptureEngine {
     }
   }
 
-  // Resolves true once the visible viewport of the chat scroller is
-  // mostly rendered (no skeleton placeholders dominating).
-  //
-  // The signal is *coverage*: sum the heights of `[id^="chat-messages-"]`
-  // groups whose `[id^="message-content-"]` has non-empty text, clipped
-  // to the scroller's on-screen rect. If the sum is at least 70% of the
-  // viewport height, the viewport is rendered. Discord assigns
-  // `chat-messages-` IDs only to real messages, so skeleton rows
-  // contribute zero coverage by construction.
-  //
-  // Plus: every visible `[class*="imageWrapper_"]` must have an `<img>`
-  // with `.complete && naturalWidth > 0`. Discord lazy-attaches the
-  // `<img>` only after bytes arrive, so a wrapper without one is still
-  // loading.
+  // Wraps `isViewportRendered` from ./dom in a polled wait. The
+  // predicate runs in the page; we inject its source into a thin
+  // `(fn)(document)` wrapper because waitForFunction's function-arg
+  // form can't take a `Document` from Node.
   private async waitForVisibleMessages(timeoutMs: number): Promise<boolean> {
     if (!this.page) return false;
     try {
       await this.page.waitForFunction(
-        () => {
-          const scroller =
-            document.querySelector('[class*="managedReactiveScroller_"]') ||
-            document.querySelector('[class*="chatContent_"]');
-          if (!scroller) return false;
-          const sRect = scroller.getBoundingClientRect();
-          const sHeight = sRect.height;
-          if (sHeight <= 0) return false;
-
-          const inViewport = (el: Element) => {
-            const r = el.getBoundingClientRect();
-            return r.bottom >= sRect.top && r.top <= sRect.bottom;
-          };
-
-          // Coverage: portion of viewport height filled by groups with
-          // rendered text content.
-          let coveredHeight = 0;
-          const groups = document.querySelectorAll('[id^="chat-messages-"]');
-          for (const g of groups) {
-            const r = g.getBoundingClientRect();
-            const top = Math.max(r.top, sRect.top);
-            const bottom = Math.min(r.bottom, sRect.bottom);
-            if (bottom <= top) continue;
-            const c = g.querySelector('[id^="message-content-"]');
-            if (!c) continue;
-            if ((c.textContent?.trim().length || 0) <= 5) continue;
-            coveredHeight += bottom - top;
-          }
-
-          // Beginning-of-channel: chat may not fill the viewport. Accept
-          // if we've reached the top *and* at least one rendered group
-          // is visible.
-          const atBeginning = !!(
-            document.querySelector('[class*="emptyChannelIcon_"]') ||
-            document.querySelector('[class*="beginningOfChannel_"]')
-          );
-          const minCoverage = atBeginning ? 1 : sHeight * 0.7;
-          if (coveredHeight < minCoverage) return false;
-
-          // Image wrappers in viewport must have a fully-loaded <img>.
-          const wrappers = document.querySelectorAll('[class*="imageWrapper_"]');
-          for (const w of wrappers) {
-            if (!inViewport(w)) continue;
-            const img = w.querySelector("img");
-            if (!img) return false;
-            if (!img.complete || img.naturalWidth === 0) return false;
-          }
-          return true;
-        },
+        `(${isViewportRendered.toString()})(document)`,
         { timeout: timeoutMs, polling: 200 }
       );
       return true;
