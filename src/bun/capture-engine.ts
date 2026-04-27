@@ -384,21 +384,42 @@ export class CaptureEngine {
         const content = contentEl?.textContent?.trim() || "";
 
         const urls: string[] = [];
+        const pushUrl = (u: string) => {
+          if (u && !urls.includes(u)) urls.push(u);
+        };
+
+        // Anchor links to Discord-hosted attachments and the file-name
+        // link variant used for non-image uploads.
         group
           .querySelectorAll(
             'a[href*="cdn.discordapp.com"], a[href*="media.discordapp.net"], a[class*="fileNameLink_"]'
           )
           .forEach((a: Element) => {
-            const href =
-              (a as HTMLAnchorElement).href || a.getAttribute("href") || "";
-            if (href) urls.push(href);
+            pushUrl((a as HTMLAnchorElement).href || a.getAttribute("href") || "");
           });
+
+        // Inline images in attachment / image wrappers, plus images
+        // inside embeds (covers static GIPHY-style gif embeds).
         group
-          .querySelectorAll('[class*="imageWrapper_"] img, [class*="attachment_"] img')
+          .querySelectorAll(
+            '[class*="imageWrapper_"] img, [class*="attachment_"] img, [class*="embedWrapper_"] img'
+          )
           .forEach((img: Element) => {
-            const src = (img as HTMLImageElement).src || "";
-            if (src && !urls.includes(src)) urls.push(src);
+            pushUrl((img as HTMLImageElement).src);
           });
+
+        // <video> tags inside the message group: Tenor/GIPHY animated
+        // GIFs are rendered as autoplay videos pointing at .mp4, and
+        // native video uploads appear here too. Avatars and emoji are
+        // <img>, not <video>, so this scope is safe.
+        group.querySelectorAll("video").forEach((v: Element) => {
+          const vid = v as HTMLVideoElement;
+          pushUrl(vid.src);
+          pushUrl(vid.currentSrc);
+          v.querySelectorAll("source").forEach((s: Element) => {
+            pushUrl(s.getAttribute("src") || "");
+          });
+        });
 
         const embeds: string[] = [];
         group.querySelectorAll('[class*="embedWrapper_"]').forEach((e: Element) => {
