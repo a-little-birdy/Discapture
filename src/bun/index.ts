@@ -11,6 +11,23 @@ import { CaptureEngine } from "./capture-engine";
 import { FileStorage } from "./file-storage";
 import { loadSettings, saveSettings as persistSettings } from "./settings";
 
+// --- Hide stray console window on Windows ---
+// electrobun 1.16's launcher.exe (GUI) spawns bun.exe (CUI) without
+// CREATE_NO_WINDOW, so Windows allocates a console for the bun process.
+// Hide it before anything else runs to minimize the visible flash.
+if (process.platform === "win32") {
+  try {
+    const k32 = dlopen("kernel32.dll", {
+      GetConsoleWindow: { args: [], returns: FFIType.ptr },
+    });
+    const u32 = dlopen("user32.dll", {
+      ShowWindow: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
+    });
+    const hwnd = k32.symbols.GetConsoleWindow();
+    if (hwnd) u32.symbols.ShowWindow(hwnd, 0); // SW_HIDE
+  } catch {}
+}
+
 // --- RPC Schema ---
 
 interface DiscaptureRPCSchema extends ElectrobunRPCSchema {
