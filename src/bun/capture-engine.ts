@@ -229,8 +229,9 @@ export class CaptureEngine {
     this.messageScreenshots = new Map();
 
     try {
-      // Create output session
-      this.session = this.storage.createSession(this.format);
+      // Create output session — label DM captures with the partner's name
+      const label = await this.getDMLabel();
+      this.session = this.storage.createSession(this.format, label);
       console.log(`[capture] Session: ${this.session.outputDir}`);
 
       sendProgress({
@@ -474,6 +475,37 @@ export class CaptureEngine {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  // Returns a sanitized DM partner / group name for the current page, or null
+  // for server channels, the DM list, or anything we can't read.
+  private async getDMLabel(): Promise<string | null> {
+    if (!this.page) return null;
+    try {
+      const url = this.page.url();
+      const match = url.match(/\/channels\/@me\/([^/?#]+)/);
+      if (!match) return null;
+
+      const raw = (await this.page.evaluate(() => {
+        const headerTitle = document.querySelector(
+          'header [class*="title_"]'
+        ) as HTMLElement | null;
+        if (headerTitle?.textContent?.trim()) return headerTitle.textContent.trim();
+        const t = document.title || "";
+        return t.replace(/\s*-\s*Discord\s*$/i, "").trim();
+      })) as string;
+
+      if (!raw) return null;
+      const cleaned = raw
+        .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+        .replace(/\s+/g, "_")
+        .replace(/^[._]+|[._]+$/g, "")
+        .slice(0, 50);
+      return cleaned || null;
+    } catch (e: any) {
+      console.log(`[capture] Could not read DM label: ${e.message}`);
+      return null;
     }
   }
 

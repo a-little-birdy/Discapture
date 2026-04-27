@@ -24,12 +24,15 @@ export class FileStorage {
     this.baseDir = dir;
   }
 
-  createSession(format: string): CaptureSession {
+  createSession(format: string, label?: string | null): CaptureSession {
     const timestamp = new Date()
       .toISOString()
       .replace(/[:.]/g, "-")
       .slice(0, 19);
-    const id = `capture-${timestamp}`;
+    const safeLabel = label
+      ? label.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/^[._]+|[._]+$/g, "").slice(0, 50)
+      : "";
+    const id = safeLabel ? `capture-${safeLabel}-${timestamp}` : `capture-${timestamp}`;
     const outputDir = join(this.baseDir, id);
     const screenshotsDir = join(outputDir, "screenshots");
     const attachmentsDir = join(outputDir, "attachments");
