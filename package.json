@@ -8,7 +8,9 @@
     "postinstall": "bun run scripts/install-electrobun-cli.ts",
     "build": "electrobun build && bun run scripts/postbuild.ts",
     "dev": "electrobun dev",
-    "start": "electrobun dev"
+    "start": "electrobun dev",
+    "test": "bun test --timeout 30000",
+    "snapshot": "bun run tests/generate-snapshot.ts"
   },
   "dependencies": {
     "electrobun": "^1.16.0",
