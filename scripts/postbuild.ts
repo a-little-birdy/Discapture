@@ -1,64 +1,57 @@
-// Windows post-build:
+// Runs after `electrobun build` completes (chained from package.json,
+// not via electrobun's postBuild hook — that hook fires before
+// Resources/version.json is written, and we need to patch it).
+//
+// Windows-only work:
 //   1. Re-embed the app icon into launcher.exe / bun.exe. electrobun's
 //      bundled rcedit module has a path baked at CI time
 //      (D:\a\electrobun\...) so its own embed step silently fails. Run
 //      rcedit from the project's local node_modules instead.
-//   2. Patch bun.exe's PE Subsystem field from CUI (3) to GUI (2) so
-//      Windows doesn't allocate a console window when launcher spawns
-//      it. Logs are redirected to a file from src/bun/index.ts.
+//   2. Rewrite Resources/version.json's `channel` from "dev" to
+//      "stable". On Windows the launcher reads this file and, when
+//      channel == "dev", spawns bun.exe with inherited stdio (which
+//      attaches a console window to the GUI app). Stable -> launcher
+//      uses CreateProcessW with CREATE_NO_WINDOW: no console.
+//      We can't use `electrobun build --env=stable` because that
+//      triggers tar.zst + self-extractor packaging incompatible with
+//      our Inno Setup flow.
 
-import { existsSync, openSync, readSync, writeSync, closeSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-if (process.env.ELECTROBUN_OS !== "win") process.exit(0);
+if (process.platform !== "win32") process.exit(0);
 
-const buildDir = process.env.ELECTROBUN_BUILD_DIR;
-const appName = process.env.ELECTROBUN_APP_NAME;
-if (!buildDir || !appName) {
-  console.error("postbuild: missing ELECTROBUN_BUILD_DIR / ELECTROBUN_APP_NAME");
+const projectRoot = join(import.meta.dir, "..");
+const bundleDir = join(projectRoot, "build", "dev-win-x64", "Discapture-dev");
+
+if (!existsSync(bundleDir)) {
+  console.error(`postbuild: build folder not found at ${bundleDir}`);
   process.exit(1);
 }
 
-const projectRoot = join(import.meta.dir, "..");
 const rcedit = join(projectRoot, "node_modules", "rcedit", "bin", "rcedit-x64.exe");
 const icon = join(projectRoot, "src", "assets", "logo.ico");
-const binDir = join(buildDir, appName, "bin");
+const binDir = join(bundleDir, "bin");
 
-if (!existsSync(rcedit)) {
+if (existsSync(rcedit)) {
+  for (const exe of ["launcher.exe", "bun.exe"]) {
+    const target = join(binDir, exe);
+    if (!existsSync(target)) continue;
+    const r = spawnSync(rcedit, [target, "--set-icon", icon], { stdio: "inherit" });
+    if (r.status !== 0) console.warn(`postbuild: rcedit failed for ${exe} (${r.status})`);
+    else console.log(`postbuild: embedded icon in ${exe}`);
+  }
+} else {
   console.warn(`postbuild: rcedit not found at ${rcedit}; skipping icon embed`);
-  process.exit(0);
 }
 
-for (const exe of ["launcher.exe", "bun.exe"]) {
-  const target = join(binDir, exe);
-  if (!existsSync(target)) continue;
-  const r = spawnSync(rcedit, [target, "--set-icon", icon], { stdio: "inherit" });
-  if (r.status !== 0) console.warn(`postbuild: rcedit failed for ${exe} (${r.status})`);
-  else console.log(`postbuild: embedded icon in ${exe}`);
-}
-
-// Flip bun.exe Subsystem from IMAGE_SUBSYSTEM_WINDOWS_CUI (3) to
-// IMAGE_SUBSYSTEM_WINDOWS_GUI (2). PE layout: e_lfanew at file offset
-// 0x3C (uint32 LE) -> PE header start. Subsystem is uint16 LE at
-// PE header + 0x5C (same offset for PE32 and PE32+).
-const bunExe = join(binDir, "bun.exe");
-if (existsSync(bunExe)) {
-  const fd = openSync(bunExe, "r+");
-  try {
-    const lfanew = Buffer.alloc(4);
-    readSync(fd, lfanew, 0, 4, 0x3c);
-    const peOff = lfanew.readUInt32LE(0);
-    const subOff = peOff + 0x5c;
-    const sub = Buffer.alloc(2);
-    readSync(fd, sub, 0, 2, subOff);
-    if (sub.readUInt16LE(0) === 3) {
-      writeSync(fd, Buffer.from([0x02, 0x00]), 0, 2, subOff);
-      console.log("postbuild: patched bun.exe subsystem CUI -> GUI");
-    } else {
-      console.log(`postbuild: bun.exe subsystem already ${sub.readUInt16LE(0)}; skipping patch`);
-    }
-  } finally {
-    closeSync(fd);
+const versionJsonPath = join(bundleDir, "Resources", "version.json");
+if (existsSync(versionJsonPath)) {
+  const meta = JSON.parse(readFileSync(versionJsonPath, "utf8"));
+  if (meta.channel !== "stable") {
+    meta.channel = "stable";
+    writeFileSync(versionJsonPath, JSON.stringify(meta));
+    console.log("postbuild: set version.json channel -> stable (suppresses console window)");
   }
 }

@@ -7,9 +7,6 @@ export default {
     version: "0.1.0",
     description: "Discord chat capture and archival tool",
   },
-  scripts: {
-    postBuild: "scripts/postbuild.ts",
-  },
   build: {
     bun: {
       entrypoint: "src/bun/index.ts",

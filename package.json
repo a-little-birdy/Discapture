@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "postinstall": "bun run scripts/install-electrobun-cli.ts",
-    "build": "electrobun build",
+    "build": "electrobun build && bun run scripts/postbuild.ts",
     "dev": "electrobun dev",
     "start": "electrobun dev"
   },

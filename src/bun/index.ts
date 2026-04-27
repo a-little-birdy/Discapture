@@ -13,8 +13,9 @@ import { CaptureEngine } from "./capture-engine";
 import { FileStorage } from "./file-storage";
 import { loadSettings, saveSettings as persistSettings } from "./settings";
 
-// --- Redirect stdout/stderr to log file (Windows ships GUI-subsystem
-// bun.exe so there's no attached console for native writes to land in) ---
+// --- Redirect stdout/stderr to a log file. The launcher runs bun via
+// CreateProcessW with CREATE_NO_WINDOW, so there's no attached console
+// for native writes; without redirection, console.log output is lost. ---
 const logsDir = join(homedir(), "Documents", "Discapture", "logs");
 try {
   mkdirSync(logsDir, { recursive: true });
@@ -22,13 +23,12 @@ try {
   const logStream = createWriteStream(join(logsDir, `discapture-${stamp}.log`), {
     flags: "a",
   });
-  const wrap = (orig: typeof process.stdout.write) =>
-    ((chunk: any, ...args: any[]) => {
-      try { logStream.write(chunk); } catch {}
-      return orig.call(process.stdout, chunk, ...args);
-    }) as typeof process.stdout.write;
-  process.stdout.write = wrap(process.stdout.write.bind(process.stdout));
-  process.stderr.write = wrap(process.stderr.write.bind(process.stderr));
+  const writeToLog = ((chunk: any) => {
+    try { logStream.write(chunk); } catch {}
+    return true;
+  }) as typeof process.stdout.write;
+  process.stdout.write = writeToLog;
+  process.stderr.write = writeToLog;
 
   // Prune logs older than 7 days
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
