@@ -435,6 +435,26 @@ export class CaptureEngine {
         .querySelectorAll('[class*="jumpToPresentBar_"]')
         .forEach((el) => el.remove());
 
+      // Remove the typing indicator ("X is typing...") at the bottom
+      // of the channel — its presence depends on real-time activity
+      // and shouldn't bleed into archived screenshots.
+      document
+        .querySelectorAll('[class*="typing_"]')
+        .forEach((el) => el.remove());
+
+      // Remove the "N new messages since ..." unread bar. The span
+      // has id^="NewMessagesBarJumpToNewMessages_" — walk up to the
+      // nearest clickable ancestor (the whole bar is a button) and
+      // strip that. Fall back to the span itself if no wrapper found.
+      document
+        .querySelectorAll('[id^="NewMessagesBarJumpToNewMessages_"]')
+        .forEach((span) => {
+          const bar = span.closest(
+            'button, [role="button"], [class*="bar_"], [class*="Bar_"]'
+          );
+          (bar || span).remove();
+        });
+
       return spoilers.length;
     });
 
