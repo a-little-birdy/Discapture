@@ -1,0 +1,264 @@
+<!doctype html>
+<!--
+  Synthetic Discord channel fixture for capture-engine tests.
+
+  Class names use the same `_test` suffix pattern that real Discord
+  uses (`chatContent_abc12`, etc.) so the project's wildcard
+  `[class*="chatContent_"]` selectors match.
+
+  Slow-load mode: append `?slow=N` to the URL where N is ms per
+  message-render. ~70% of the messages will start as skeleton
+  placeholders (no `chat-messages-` IDs) and promote one-by-one
+  after staggered delays. Without the param, the channel renders
+  fully on load.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Discapture fixture</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; }
+
+    .scroller {
+      width: 800px;
+      height: 600px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      position: relative;
+    }
+    .chat { padding: 8px; }
+    .group {
+      padding: 6px 8px;
+      margin-bottom: 4px;
+      min-height: 50px;
+      border-bottom: 1px solid #eee;
+    }
+    .username { font-weight: 600; color: #5865f2; }
+    .timestamp { font-size: 11px; color: #888; margin-left: 6px; }
+    .content { margin-top: 2px; }
+    .skeleton {
+      height: 50px;
+      background: linear-gradient(90deg, #eee 25%, #ddd 50%, #eee 75%);
+      margin-bottom: 4px;
+      border-radius: 4px;
+    }
+    .imageWrapper_test { display: inline-block; max-width: 320px; }
+    .imageWrapper_test img { display: block; max-width: 100%; }
+    .embedWrapper_test {
+      border-left: 4px solid #5865f2;
+      padding: 6px 10px;
+      margin-top: 4px;
+      background: #f7f7f7;
+    }
+    .typing_test {
+      position: sticky; bottom: 0;
+      padding: 4px 12px; background: #fff; font-size: 12px; color: #666;
+    }
+    .newMessagesBar_test, .jumpToPresentBar_test {
+      position: sticky; top: 0;
+      padding: 6px 12px; background: #5865f2; color: #fff; font-size: 12px;
+      cursor: pointer; border: 0;
+    }
+    .emptyChannelIcon_test {
+      padding: 20px; text-align: center; color: #999;
+    }
+  </style>
+</head>
+<body>
+  <div class="scroller managedReactiveScroller_test" id="scroller">
+    <div class="chat chatContent_test">
+
+      <div class="emptyChannelIcon_test">— Beginning of #fixture-channel —</div>
+
+      <button class="jumpToPresentBar_test">Jump to present</button>
+
+      <div class="newMessagesBar_test">
+        <span id="NewMessagesBarJumpToNewMessages_99" class="span__0f481">
+          1 new message since 10:48 PM
+        </span>
+      </div>
+
+      <ol class="messageList">
+
+        <li id="chat-messages-1001" class="group" data-author="alice">
+          <span class="username_test username">alice</span>
+          <time class="timestamp" datetime="2026-04-25T15:00:00Z">3:00 PM</time>
+          <div id="message-content-1001" class="content">
+            Hey everyone! Welcome to the test channel.
+          </div>
+        </li>
+
+        <li id="chat-messages-1002" class="group" data-author="alice">
+          <div id="message-content-1002" class="content">
+            This is a follow-up message from the same author.
+          </div>
+        </li>
+
+        <li id="chat-messages-1003" class="group" data-author="bob">
+          <span class="username_test username">bob</span>
+          <time class="timestamp" datetime="2026-04-25T15:01:30Z">3:01 PM</time>
+          <div id="message-content-1003" class="content">
+            Has anyone seen the new release notes?
+          </div>
+        </li>
+
+        <li id="chat-messages-1004" class="group" data-author="alice">
+          <span class="username_test username">alice</span>
+          <time class="timestamp" datetime="2026-04-25T15:02:00Z">3:02 PM</time>
+          <div id="message-content-1004" class="content">
+            Sharing a screenshot:
+          </div>
+          <div class="imageWrapper_test">
+            <img src="https://cdn.discordapp.com/attachments/123/456/screenshot.png"
+                 width="320" height="180" alt="screenshot">
+          </div>
+        </li>
+
+        <li id="chat-messages-1005" class="group" data-author="carol">
+          <span class="username_test username">carol</span>
+          <time class="timestamp" datetime="2026-04-25T15:03:15Z">3:03 PM</time>
+          <div id="message-content-1005" class="content">
+            Here's a Tenor GIF reaction:
+          </div>
+          <div class="embedWrapper_test">
+            <video src="https://media.tenor.com/abc123XYZ/funny-cat.mp4"
+                   autoplay loop muted playsinline></video>
+          </div>
+        </li>
+
+        <li id="chat-messages-1006" class="group" data-author="dave">
+          <span class="username_test username">dave</span>
+          <time class="timestamp" datetime="2026-04-25T15:04:00Z">3:04 PM</time>
+          <div id="message-content-1006" class="content">
+            Static GIPHY embed below.
+          </div>
+          <div class="embedWrapper_test">
+            <img src="https://media.giphy.com/media/static-id/giphy.gif" width="240" height="180">
+          </div>
+        </li>
+
+        <li id="chat-messages-1007" class="group" data-author="alice">
+          <span class="username_test username">alice</span>
+          <time class="timestamp" datetime="2026-04-25T15:05:00Z">3:05 PM</time>
+          <div id="message-content-1007" class="content">
+            And a direct CDN attachment link.
+          </div>
+          <a href="https://cdn.discordapp.com/attachments/123/789/document.pdf"
+             class="fileNameLink_test">document.pdf</a>
+        </li>
+
+        <li id="chat-messages-1008" class="group" data-author="bob">
+          <span class="username_test username">bob</span>
+          <time class="timestamp" datetime="2026-04-25T15:06:00Z">3:06 PM</time>
+          <div id="message-content-1008" class="content">
+            Multi-line message:
+            line two
+            line three
+          </div>
+        </li>
+
+        <li id="chat-messages-1009" class="group" data-author="carol">
+          <span class="username_test username">carol</span>
+          <time class="timestamp" datetime="2026-04-25T15:07:00Z">3:07 PM</time>
+          <div id="message-content-1009" class="content">
+            <code>npm install</code> just worked.
+          </div>
+        </li>
+
+        <li id="chat-messages-1010" class="group" data-author="dave">
+          <span class="username_test username">dave</span>
+          <time class="timestamp" datetime="2026-04-25T15:08:00Z">3:08 PM</time>
+          <div id="message-content-1010" class="content">
+            Mentioning <span class="mention">@alice</span> for visibility.
+          </div>
+        </li>
+
+        <li id="chat-messages-1011" class="group" data-author="alice">
+          <span class="username_test username">alice</span>
+          <time class="timestamp" datetime="2026-04-25T15:09:00Z">3:09 PM</time>
+          <div id="message-content-1011" class="content">
+            Thanks for the ping! Looking now.
+          </div>
+        </li>
+
+        <li id="chat-messages-1012" class="group" data-author="bob">
+          <span class="username_test username">bob</span>
+          <time class="timestamp" datetime="2026-04-25T15:10:00Z">3:10 PM</time>
+          <div id="message-content-1012" class="content">
+            Native video upload incoming.
+          </div>
+          <div class="attachment_test">
+            <video src="https://cdn.discordapp.com/attachments/999/111/clip.mp4"
+                   controls></video>
+          </div>
+        </li>
+
+      </ol>
+
+      <div class="typing_test">
+        <span>alice is typing...</span>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Test-mode toggles via URL params:
+    //   ?expand=1       — set scroller height to fit all messages so
+    //                     the viewport filter doesn't clip any.
+    //   ?slow=N         — replace ~70% of message groups with skeleton
+    //                     placeholders, then promote them back one
+    //                     by one with N ms delay each.
+    (function() {
+      const params = new URLSearchParams(location.search);
+
+      if (params.get('expand') === '1') {
+        const scroller = document.getElementById('scroller');
+        // Tall enough to fit every group (no clipping by viewport filter).
+        scroller.style.height = scroller.scrollHeight + 'px';
+      }
+
+      const slow = parseInt(params.get('slow') || '0', 10);
+      if (!slow) return;
+
+      // Slow-load simulates being mid-scroll, well below the top of
+      // the channel — strip the beginning-of-channel markers so the
+      // predicate uses its real 70% coverage threshold instead of
+      // the relaxed at-beginning fallback.
+      document
+        .querySelectorAll('[class*="emptyChannelIcon_"], [class*="beginningOfChannel_"]')
+        .forEach((el) => el.remove());
+
+      const list = document.querySelector('.messageList');
+      const groups = Array.from(list.querySelectorAll('[id^="chat-messages-"]'));
+      // Hide the FIRST ~70% of groups behind skeletons. Those are at
+      // the top of the scroller (in the visible viewport), so the
+      // predicate sees skeletons-dominant and returns false. The
+      // last ~30% remain real messages below the fold and don't
+      // contribute to coverage until skeletons promote.
+      const keepLast = Math.ceil(groups.length * 0.3);
+      const toHide = groups.slice(0, groups.length - keepLast);
+
+      // Stash original HTML on the skeleton for later restoration
+      toHide.forEach((g) => {
+        const sk = document.createElement('div');
+        sk.className = 'skeleton messageGroupBlocker_test';
+        sk.dataset.realId = g.id;
+        sk.dataset.realHtml = g.outerHTML;
+        g.replaceWith(sk);
+      });
+
+      // Promote skeletons back to real groups, one by one.
+      const skeletons = Array.from(list.querySelectorAll('.skeleton'));
+      skeletons.forEach((sk, i) => {
+        setTimeout(() => {
+          const wrap = document.createElement('template');
+          wrap.innerHTML = sk.dataset.realHtml;
+          sk.replaceWith(wrap.content.firstElementChild);
+        }, slow * (i + 1));
+      });
+    })();
+  </script>
+</body>
+</html>

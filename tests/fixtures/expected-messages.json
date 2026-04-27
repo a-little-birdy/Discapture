@@ -1,0 +1,118 @@
+[
+  {
+    "id": "chat-messages-1001",
+    "author": "alice",
+    "timestamp": "2026-04-25T15:00:00Z",
+    "content": "Hey everyone! Welcome to the test channel.",
+    "attachments": [],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1002",
+    "author": "alice",
+    "timestamp": "2026-04-25T15:00:00Z",
+    "content": "This is a follow-up message from the same author.",
+    "attachments": [],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1003",
+    "author": "bob",
+    "timestamp": "2026-04-25T15:01:30Z",
+    "content": "Has anyone seen the new release notes?",
+    "attachments": [],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1004",
+    "author": "alice",
+    "timestamp": "2026-04-25T15:02:00Z",
+    "content": "Sharing a screenshot:",
+    "attachments": [
+      {
+        "url": "https://cdn.discordapp.com/attachments/123/456/screenshot.png"
+      }
+    ],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1005",
+    "author": "carol",
+    "timestamp": "2026-04-25T15:03:15Z",
+    "content": "Here's a Tenor GIF reaction:",
+    "attachments": [
+      {
+        "url": "https://media.tenor.com/abc123XYZ/funny-cat.mp4"
+      }
+    ],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1006",
+    "author": "dave",
+    "timestamp": "2026-04-25T15:04:00Z",
+    "content": "Static GIPHY embed below.",
+    "attachments": [
+      {
+        "url": "https://media.giphy.com/media/static-id/giphy.gif"
+      }
+    ],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1007",
+    "author": "alice",
+    "timestamp": "2026-04-25T15:05:00Z",
+    "content": "And a direct CDN attachment link.",
+    "attachments": [
+      {
+        "url": "https://cdn.discordapp.com/attachments/123/789/document.pdf"
+      }
+    ],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1008",
+    "author": "bob",
+    "timestamp": "2026-04-25T15:06:00Z",
+    "content": "Multi-line message:\n            line two\n            line three",
+    "attachments": [],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1009",
+    "author": "carol",
+    "timestamp": "2026-04-25T15:07:00Z",
+    "content": "npm install just worked.",
+    "attachments": [],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1010",
+    "author": "dave",
+    "timestamp": "2026-04-25T15:08:00Z",
+    "content": "Mentioning @alice for visibility.",
+    "attachments": [],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1011",
+    "author": "alice",
+    "timestamp": "2026-04-25T15:09:00Z",
+    "content": "Thanks for the ping! Looking now.",
+    "attachments": [],
+    "embeds": []
+  },
+  {
+    "id": "chat-messages-1012",
+    "author": "bob",
+    "timestamp": "2026-04-25T15:10:00Z",
+    "content": "Native video upload incoming.",
+    "attachments": [
+      {
+        "url": "https://cdn.discordapp.com/attachments/999/111/clip.mp4"
+      }
+    ],
+    "embeds": []
+  }
+]
