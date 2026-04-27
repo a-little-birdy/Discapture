@@ -384,21 +384,42 @@ export class CaptureEngine {
         const content = contentEl?.textContent?.trim() || "";
 
         const urls: string[] = [];
+        const pushUrl = (u: string) => {
+          if (u && !urls.includes(u)) urls.push(u);
+        };
+
+        // Anchor links to Discord-hosted attachments and the file-name
+        // link variant used for non-image uploads.
         group
           .querySelectorAll(
             'a[href*="cdn.discordapp.com"], a[href*="media.discordapp.net"], a[class*="fileNameLink_"]'
           )
           .forEach((a: Element) => {
-            const href =
-              (a as HTMLAnchorElement).href || a.getAttribute("href") || "";
-            if (href) urls.push(href);
+            pushUrl((a as HTMLAnchorElement).href || a.getAttribute("href") || "");
           });
+
+        // Inline images in attachment / image wrappers, plus images
+        // inside embeds (covers static GIPHY-style gif embeds).
         group
-          .querySelectorAll('[class*="imageWrapper_"] img, [class*="attachment_"] img')
+          .querySelectorAll(
+            '[class*="imageWrapper_"] img, [class*="attachment_"] img, [class*="embedWrapper_"] img'
+          )
           .forEach((img: Element) => {
-            const src = (img as HTMLImageElement).src || "";
-            if (src && !urls.includes(src)) urls.push(src);
+            pushUrl((img as HTMLImageElement).src);
           });
+
+        // <video> tags inside the message group: Tenor/GIPHY animated
+        // GIFs are rendered as autoplay videos pointing at .mp4, and
+        // native video uploads appear here too. Avatars and emoji are
+        // <img>, not <video>, so this scope is safe.
+        group.querySelectorAll("video").forEach((v: Element) => {
+          const vid = v as HTMLVideoElement;
+          pushUrl(vid.src);
+          pushUrl(vid.currentSrc);
+          v.querySelectorAll("source").forEach((s: Element) => {
+            pushUrl(s.getAttribute("src") || "");
+          });
+        });
 
         const embeds: string[] = [];
         group.querySelectorAll('[class*="embedWrapper_"]').forEach((e: Element) => {
@@ -434,6 +455,33 @@ export class CaptureEngine {
       document
         .querySelectorAll('[class*="jumpToPresentBar_"]')
         .forEach((el) => el.remove());
+
+      // Remove the typing indicator ("X is typing...") at the bottom
+      // of the channel — its presence depends on real-time activity
+      // and shouldn't bleed into archived screenshots.
+      // Match both the modern CSS-modules form `typing_` and the older
+      // hash form `typing-`, then verify by text content so we don't
+      // strip something that merely happens to contain "typing" in
+      // its class name.
+      document
+        .querySelectorAll('[class*="typing_"], [class^="typing-"]')
+        .forEach((el) => {
+          const txt = (el.textContent || "").toLowerCase();
+          if (txt.includes("typing")) el.remove();
+        });
+
+      // Remove the "N new messages since ..." unread bar. The span
+      // has id^="NewMessagesBarJumpToNewMessages_" — walk up to the
+      // nearest clickable ancestor (the whole bar is a button) and
+      // strip that. Fall back to the span itself if no wrapper found.
+      document
+        .querySelectorAll('[id^="NewMessagesBarJumpToNewMessages_"]')
+        .forEach((span) => {
+          const bar = span.closest(
+            'button, [role="button"], [class*="bar_"], [class*="Bar_"]'
+          );
+          (bar || span).remove();
+        });
 
       return spoilers.length;
     });
@@ -486,6 +534,81 @@ export class CaptureEngine {
     }
   }
 
+  // Resolves true once the visible viewport of the chat scroller is
+  // mostly rendered (no skeleton placeholders dominating).
+  //
+  // The signal is *coverage*: sum the heights of `[id^="chat-messages-"]`
+  // groups whose `[id^="message-content-"]` has non-empty text, clipped
+  // to the scroller's on-screen rect. If the sum is at least 70% of the
+  // viewport height, the viewport is rendered. Discord assigns
+  // `chat-messages-` IDs only to real messages, so skeleton rows
+  // contribute zero coverage by construction.
+  //
+  // Plus: every visible `[class*="imageWrapper_"]` must have an `<img>`
+  // with `.complete && naturalWidth > 0`. Discord lazy-attaches the
+  // `<img>` only after bytes arrive, so a wrapper without one is still
+  // loading.
+  private async waitForVisibleMessages(timeoutMs: number): Promise<boolean> {
+    if (!this.page) return false;
+    try {
+      await this.page.waitForFunction(
+        () => {
+          const scroller =
+            document.querySelector('[class*="managedReactiveScroller_"]') ||
+            document.querySelector('[class*="chatContent_"]');
+          if (!scroller) return false;
+          const sRect = scroller.getBoundingClientRect();
+          const sHeight = sRect.height;
+          if (sHeight <= 0) return false;
+
+          const inViewport = (el: Element) => {
+            const r = el.getBoundingClientRect();
+            return r.bottom >= sRect.top && r.top <= sRect.bottom;
+          };
+
+          // Coverage: portion of viewport height filled by groups with
+          // rendered text content.
+          let coveredHeight = 0;
+          const groups = document.querySelectorAll('[id^="chat-messages-"]');
+          for (const g of groups) {
+            const r = g.getBoundingClientRect();
+            const top = Math.max(r.top, sRect.top);
+            const bottom = Math.min(r.bottom, sRect.bottom);
+            if (bottom <= top) continue;
+            const c = g.querySelector('[id^="message-content-"]');
+            if (!c) continue;
+            if ((c.textContent?.trim().length || 0) <= 5) continue;
+            coveredHeight += bottom - top;
+          }
+
+          // Beginning-of-channel: chat may not fill the viewport. Accept
+          // if we've reached the top *and* at least one rendered group
+          // is visible.
+          const atBeginning = !!(
+            document.querySelector('[class*="emptyChannelIcon_"]') ||
+            document.querySelector('[class*="beginningOfChannel_"]')
+          );
+          const minCoverage = atBeginning ? 1 : sHeight * 0.7;
+          if (coveredHeight < minCoverage) return false;
+
+          // Image wrappers in viewport must have a fully-loaded <img>.
+          const wrappers = document.querySelectorAll('[class*="imageWrapper_"]');
+          for (const w of wrappers) {
+            if (!inViewport(w)) continue;
+            const img = w.querySelector("img");
+            if (!img) return false;
+            if (!img.complete || img.naturalWidth === 0) return false;
+          }
+          return true;
+        },
+        { timeout: timeoutMs, polling: 200 }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async getScrollState(): Promise<{
     scrollTop: number;
     scrollHeight: number;
@@ -519,19 +642,9 @@ export class CaptureEngine {
 
     // --- Wait for messages to fully render with actual text content ---
     console.log("[capture] Waiting for messages to render...");
-    try {
-      await this.page.waitForFunction(
-        () => {
-          const msgs = document.querySelectorAll('[id^="message-content-"]');
-          if (msgs.length < 2) return false;
-          return Array.from(msgs).some(
-            (m) => (m.textContent?.trim().length || 0) > 5
-          );
-        },
-        { timeout: 30000 }
-      );
+    if (await this.waitForVisibleMessages(30000)) {
       console.log("[capture] Messages with text content detected");
-    } catch {
+    } else {
       console.log("[capture] Timed out waiting for message text, continuing anyway");
     }
     // Wait for avatars/images/embeds to load
@@ -572,8 +685,11 @@ export class CaptureEngine {
       await this.page.keyboard.press("PageUp");
       console.log(`[capture] PageUp (was scrollTop: ${beforeScroll.scrollTop})`);
 
-      // 3. Wait for Discord to finish scrolling and load content
-      await new Promise((r) => setTimeout(r, 500));
+      // 3. Wait for Discord to render the new viewport. Cap at 10s so a
+      // truly stalled channel doesn't lock up the whole capture.
+      if (!(await this.waitForVisibleMessages(10000))) {
+        console.log("[capture] Render wait timed out; screenshotting anyway");
+      }
 
       // 4. Parse messages and take screenshot AFTER content has loaded
       const messages = await this.parseVisibleMessages();
