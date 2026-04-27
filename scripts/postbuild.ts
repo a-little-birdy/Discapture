@@ -1,9 +1,13 @@
-// Re-embed the app icon into launcher.exe / bun.exe on Windows.
-// electrobun's bundled rcedit module has a path baked at CI time
-// (D:\a\electrobun\...) so its own embed step silently fails. Run
-// rcedit from the project's local node_modules instead.
+// Windows post-build:
+//   1. Re-embed the app icon into launcher.exe / bun.exe. electrobun's
+//      bundled rcedit module has a path baked at CI time
+//      (D:\a\electrobun\...) so its own embed step silently fails. Run
+//      rcedit from the project's local node_modules instead.
+//   2. Patch bun.exe's PE Subsystem field from CUI (3) to GUI (2) so
+//      Windows doesn't allocate a console window when launcher spawns
+//      it. Logs are redirected to a file from src/bun/index.ts.
 
-import { existsSync } from "node:fs";
+import { existsSync, openSync, readSync, writeSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -32,4 +36,29 @@ for (const exe of ["launcher.exe", "bun.exe"]) {
   const r = spawnSync(rcedit, [target, "--set-icon", icon], { stdio: "inherit" });
   if (r.status !== 0) console.warn(`postbuild: rcedit failed for ${exe} (${r.status})`);
   else console.log(`postbuild: embedded icon in ${exe}`);
+}
+
+// Flip bun.exe Subsystem from IMAGE_SUBSYSTEM_WINDOWS_CUI (3) to
+// IMAGE_SUBSYSTEM_WINDOWS_GUI (2). PE layout: e_lfanew at file offset
+// 0x3C (uint32 LE) -> PE header start. Subsystem is uint16 LE at
+// PE header + 0x5C (same offset for PE32 and PE32+).
+const bunExe = join(binDir, "bun.exe");
+if (existsSync(bunExe)) {
+  const fd = openSync(bunExe, "r+");
+  try {
+    const lfanew = Buffer.alloc(4);
+    readSync(fd, lfanew, 0, 4, 0x3c);
+    const peOff = lfanew.readUInt32LE(0);
+    const subOff = peOff + 0x5c;
+    const sub = Buffer.alloc(2);
+    readSync(fd, sub, 0, 2, subOff);
+    if (sub.readUInt16LE(0) === 3) {
+      writeSync(fd, Buffer.from([0x02, 0x00]), 0, 2, subOff);
+      console.log("postbuild: patched bun.exe subsystem CUI -> GUI");
+    } else {
+      console.log(`postbuild: bun.exe subsystem already ${sub.readUInt16LE(0)}; skipping patch`);
+    }
+  } finally {
+    closeSync(fd);
+  }
 }

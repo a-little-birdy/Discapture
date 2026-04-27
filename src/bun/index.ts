@@ -6,27 +6,39 @@ import {
   type RPCSchema,
 } from "electrobun/bun";
 import { dlopen, FFIType, ptr } from "bun:ffi";
-import { resolve } from "path";
+import { resolve, join } from "path";
+import { mkdirSync, createWriteStream, readdirSync, statSync, unlinkSync } from "fs";
+import { homedir } from "os";
 import { CaptureEngine } from "./capture-engine";
 import { FileStorage } from "./file-storage";
 import { loadSettings, saveSettings as persistSettings } from "./settings";
 
-// --- Hide stray console window on Windows ---
-// electrobun 1.16's launcher.exe (GUI) spawns bun.exe (CUI) without
-// CREATE_NO_WINDOW, so Windows allocates a console for the bun process.
-// Hide it before anything else runs to minimize the visible flash.
-if (process.platform === "win32") {
-  try {
-    const k32 = dlopen("kernel32.dll", {
-      GetConsoleWindow: { args: [], returns: FFIType.ptr },
-    });
-    const u32 = dlopen("user32.dll", {
-      ShowWindow: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
-    });
-    const hwnd = k32.symbols.GetConsoleWindow();
-    if (hwnd) u32.symbols.ShowWindow(hwnd, 0); // SW_HIDE
-  } catch {}
-}
+// --- Redirect stdout/stderr to log file (Windows ships GUI-subsystem
+// bun.exe so there's no attached console for native writes to land in) ---
+const logsDir = join(homedir(), "Documents", "Discapture", "logs");
+try {
+  mkdirSync(logsDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const logStream = createWriteStream(join(logsDir, `discapture-${stamp}.log`), {
+    flags: "a",
+  });
+  const wrap = (orig: typeof process.stdout.write) =>
+    ((chunk: any, ...args: any[]) => {
+      try { logStream.write(chunk); } catch {}
+      return orig.call(process.stdout, chunk, ...args);
+    }) as typeof process.stdout.write;
+  process.stdout.write = wrap(process.stdout.write.bind(process.stdout));
+  process.stderr.write = wrap(process.stderr.write.bind(process.stderr));
+
+  // Prune logs older than 7 days
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  for (const f of readdirSync(logsDir)) {
+    const p = join(logsDir, f);
+    try {
+      if (statSync(p).mtimeMs < cutoff) unlinkSync(p);
+    } catch {}
+  }
+} catch {}
 
 // --- RPC Schema ---
 
