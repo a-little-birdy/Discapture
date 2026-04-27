@@ -438,9 +438,16 @@ export class CaptureEngine {
       // Remove the typing indicator ("X is typing...") at the bottom
       // of the channel — its presence depends on real-time activity
       // and shouldn't bleed into archived screenshots.
+      // Match both the modern CSS-modules form `typing_` and the older
+      // hash form `typing-`, then verify by text content so we don't
+      // strip something that merely happens to contain "typing" in
+      // its class name.
       document
-        .querySelectorAll('[class*="typing_"]')
-        .forEach((el) => el.remove());
+        .querySelectorAll('[class*="typing_"], [class^="typing-"]')
+        .forEach((el) => {
+          const txt = (el.textContent || "").toLowerCase();
+          if (txt.includes("typing")) el.remove();
+        });
 
       // Remove the "N new messages since ..." unread bar. The span
       // has id^="NewMessagesBarJumpToNewMessages_" — walk up to the
