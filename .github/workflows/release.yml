@@ -49,8 +49,10 @@ jobs:
       # --- Windows: Inno Setup installer ---
       - name: Build installer (Windows)
         if: matrix.platform == 'win'
+        shell: pwsh
         run: |
-          iscc /DAppVersion="${{ github.ref_name }}" /DBuildDir="build\dev-win-x64\Discapture-dev" /DOutputDir="." scripts\installer.iss
+          $version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
+          & iscc /DAppVersion=$version "/DBuildDir=build\dev-win-x64\Discapture-dev" /DOutputDir=. "scripts\installer.iss"
 
       # --- macOS: .app bundle in .dmg ---
       - name: Package .app bundle (macOS)
@@ -59,33 +61,19 @@ jobs:
           APP_VERSION: ${{ github.ref_name }}
         run: |
           VERSION="${APP_VERSION#v}"
-          APP="build/Discapture.app"
-          mkdir -p "$APP/Contents/MacOS"
+          SRC="build/dev-darwin-arm64/Discapture-dev.app"
+          DST="build/Discapture.app"
+          cp -R "$SRC" "$DST"
 
-          cp -R build/dev-darwin-arm64/Discapture-dev/* "$APP/Contents/MacOS/"
+          # Patch the Info.plist that electrobun already generated.
+          # CFBundleExecutable stays as "launcher" — that's the real binary name.
+          PLIST="$DST/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName Discapture" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
 
-          cat > "$APP/Contents/Info.plist" << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleName</key>
-            <string>Discapture</string>
-            <key>CFBundleIdentifier</key>
-            <string>dev.discapture.app</string>
-            <key>CFBundleVersion</key>
-            <string>${VERSION}</string>
-            <key>CFBundleShortVersionString</key>
-            <string>${VERSION}</string>
-            <key>CFBundleExecutable</key>
-            <string>Discapture</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-          </dict>
-          </plist>
-          EOF
-
-          hdiutil create -volname "Discapture" -srcfolder "$APP" -ov -format UDZO "${{ matrix.artifact }}"
+          hdiutil create -volname "Discapture" -srcfolder "$DST" -ov -format UDZO "${{ matrix.artifact }}"
 
       # --- Linux: .deb package ---
       - name: Package .deb (Linux)
@@ -107,11 +95,15 @@ jobs:
 
           cat > "$PKG/usr/share/applications/discapture.desktop" << EOF
           [Desktop Entry]
+          Version=1.0
+          Type=Application
           Name=Discapture
           Comment=Discord chat capture and archival tool
           Exec=/usr/lib/discapture/bin/launcher
-          Type=Application
-          Categories=Utility;
+          Icon=/usr/lib/discapture/Resources/appIcon.png
+          Terminal=false
+          StartupWMClass=Discapture
+          Categories=Utility;Network;
           EOF
 
           cat > "$PKG/DEBIAN/control" << EOF
