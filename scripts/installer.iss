@@ -1,6 +1,11 @@
 #define Root SourcePath + "\.."
 
 [Setup]
+; AppId pinned to "Discapture" — matches the implicit AppId Inno derived
+; from AppName in the v0.1.0 installer, so this version upgrades the
+; existing install in-place instead of leaving an orphaned uninstall
+; entry. Do not change.
+AppId=Discapture
 AppName=Discapture
 AppVersion={#AppVersion}
 AppPublisher=Discapture
