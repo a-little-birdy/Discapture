@@ -486,6 +486,81 @@ export class CaptureEngine {
     }
   }
 
+  // Resolves true once the visible viewport of the chat scroller is
+  // mostly rendered (no skeleton placeholders dominating).
+  //
+  // The signal is *coverage*: sum the heights of `[id^="chat-messages-"]`
+  // groups whose `[id^="message-content-"]` has non-empty text, clipped
+  // to the scroller's on-screen rect. If the sum is at least 70% of the
+  // viewport height, the viewport is rendered. Discord assigns
+  // `chat-messages-` IDs only to real messages, so skeleton rows
+  // contribute zero coverage by construction.
+  //
+  // Plus: every visible `[class*="imageWrapper_"]` must have an `<img>`
+  // with `.complete && naturalWidth > 0`. Discord lazy-attaches the
+  // `<img>` only after bytes arrive, so a wrapper without one is still
+  // loading.
+  private async waitForVisibleMessages(timeoutMs: number): Promise<boolean> {
+    if (!this.page) return false;
+    try {
+      await this.page.waitForFunction(
+        () => {
+          const scroller =
+            document.querySelector('[class*="managedReactiveScroller_"]') ||
+            document.querySelector('[class*="chatContent_"]');
+          if (!scroller) return false;
+          const sRect = scroller.getBoundingClientRect();
+          const sHeight = sRect.height;
+          if (sHeight <= 0) return false;
+
+          const inViewport = (el: Element) => {
+            const r = el.getBoundingClientRect();
+            return r.bottom >= sRect.top && r.top <= sRect.bottom;
+          };
+
+          // Coverage: portion of viewport height filled by groups with
+          // rendered text content.
+          let coveredHeight = 0;
+          const groups = document.querySelectorAll('[id^="chat-messages-"]');
+          for (const g of groups) {
+            const r = g.getBoundingClientRect();
+            const top = Math.max(r.top, sRect.top);
+            const bottom = Math.min(r.bottom, sRect.bottom);
+            if (bottom <= top) continue;
+            const c = g.querySelector('[id^="message-content-"]');
+            if (!c) continue;
+            if ((c.textContent?.trim().length || 0) <= 5) continue;
+            coveredHeight += bottom - top;
+          }
+
+          // Beginning-of-channel: chat may not fill the viewport. Accept
+          // if we've reached the top *and* at least one rendered group
+          // is visible.
+          const atBeginning = !!(
+            document.querySelector('[class*="emptyChannelIcon_"]') ||
+            document.querySelector('[class*="beginningOfChannel_"]')
+          );
+          const minCoverage = atBeginning ? 1 : sHeight * 0.7;
+          if (coveredHeight < minCoverage) return false;
+
+          // Image wrappers in viewport must have a fully-loaded <img>.
+          const wrappers = document.querySelectorAll('[class*="imageWrapper_"]');
+          for (const w of wrappers) {
+            if (!inViewport(w)) continue;
+            const img = w.querySelector("img");
+            if (!img) return false;
+            if (!img.complete || img.naturalWidth === 0) return false;
+          }
+          return true;
+        },
+        { timeout: timeoutMs, polling: 200 }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async getScrollState(): Promise<{
     scrollTop: number;
     scrollHeight: number;
@@ -519,19 +594,9 @@ export class CaptureEngine {
 
     // --- Wait for messages to fully render with actual text content ---
     console.log("[capture] Waiting for messages to render...");
-    try {
-      await this.page.waitForFunction(
-        () => {
-          const msgs = document.querySelectorAll('[id^="message-content-"]');
-          if (msgs.length < 2) return false;
-          return Array.from(msgs).some(
-            (m) => (m.textContent?.trim().length || 0) > 5
-          );
-        },
-        { timeout: 30000 }
-      );
+    if (await this.waitForVisibleMessages(30000)) {
       console.log("[capture] Messages with text content detected");
-    } catch {
+    } else {
       console.log("[capture] Timed out waiting for message text, continuing anyway");
     }
     // Wait for avatars/images/embeds to load
@@ -572,8 +637,11 @@ export class CaptureEngine {
       await this.page.keyboard.press("PageUp");
       console.log(`[capture] PageUp (was scrollTop: ${beforeScroll.scrollTop})`);
 
-      // 3. Wait for Discord to finish scrolling and load content
-      await new Promise((r) => setTimeout(r, 500));
+      // 3. Wait for Discord to render the new viewport. Cap at 10s so a
+      // truly stalled channel doesn't lock up the whole capture.
+      if (!(await this.waitForVisibleMessages(10000))) {
+        console.log("[capture] Render wait timed out; screenshotting anyway");
+      }
 
       // 4. Parse messages and take screenshot AFTER content has loaded
       const messages = await this.parseVisibleMessages();
