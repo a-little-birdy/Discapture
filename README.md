@@ -103,10 +103,10 @@ Your Discord login is stored in a persistent browser profile at `~/Documents/Dis
 ## Building for release
 
 ```sh
-BUILD_ENV=release bash scripts/build.sh
+bun run build
 ```
 
-The release build is written to `build/release-{platform}-{arch}/Discapture/`.
+The build is written to `build/dev-{platform}-{arch}/Discapture-dev/`.
 
 On Windows, an Inno Setup installer script is available at `scripts/installer.iss` for packaging.
 

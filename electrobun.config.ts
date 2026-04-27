@@ -7,6 +7,9 @@ export default {
     version: "0.1.0",
     description: "Discord chat capture and archival tool",
   },
+  scripts: {
+    postBuild: "scripts/postbuild.ts",
+  },
   build: {
     bun: {
       entrypoint: "src/bun/index.ts",
@@ -21,7 +24,7 @@ export default {
       "src/control-ui/style.css": "views/control-ui/style.css",
     },
     win: {
-      icon: "src/assets/logo.png",
+      icon: "src/assets/logo.ico",
     },
     linux: {
       icon: "src/assets/logo.png",
