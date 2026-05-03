@@ -163,9 +163,9 @@ btnRecord.addEventListener("click", async () => {
 });
 
 btnStop.addEventListener("click", async () => {
-  recordingStatus.textContent = "Stopping...";
+  recordingStatus.textContent = "Finalizing capture...";
   await electrobun.rpc?.request.stopCapture();
-  showPhase("ready");
+  // captureComplete -> done; captureError -> ready. Don't switch phase here.
 });
 
 btnAgain.addEventListener("click", () => {
