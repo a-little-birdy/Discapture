@@ -50,7 +50,17 @@ export async function launchTestBrowser(): Promise<Browser> {
   return puppeteer.launch({
     executablePath: exe,
     headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    // Cold CI runners can take >30s for Chrome's first launch (extension
+    // scan, profile init). Default puppeteer timeout is 30s.
+    timeout: 90_000,
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-extensions",
+    ],
   });
 }
 
