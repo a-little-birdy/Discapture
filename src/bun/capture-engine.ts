@@ -492,15 +492,25 @@ export class CaptureEngine {
           'header [class*="title_"]'
         ) as HTMLElement | null;
         if (headerTitle?.textContent?.trim()) return headerTitle.textContent.trim();
-        const t = document.title || "";
-        return t.replace(/\s*-\s*Discord\s*$/i, "").trim();
+        // Title typically: "(N) @Username - Discord" or "● Discord | @Username".
+        // Strip trailing " - Discord", any leading "Discord |"/"| Discord",
+        // and unread badges like "(12)".
+        // Title typically: "(N) @Username - Discord" or "● Discord | @Username".
+        // Strip Discord chrome step-by-step so we keep just the name.
+        let t = (document.title || "").trim();
+        t = t.replace(/\s*-\s*Discord\s*$/i, "");
+        t = t.replace(/^\s*\(\d+\)\s*/, "");          // unread count
+        t = t.replace(/^[^A-Za-z0-9@]+/, "");         // leading badges/symbols
+        t = t.replace(/^\s*Discord\s*[|·•●]\s*/i, ""); // "Discord |" prefix
+        t = t.replace(/\s*[|·•●]\s*Discord\s*$/i, ""); // "| Discord" suffix
+        return t.trim();
       })) as string;
 
       if (!raw) return null;
+      // Keep only alphanum + @, collapse anything else into a single dash.
       const cleaned = raw
-        .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
-        .replace(/\s+/g, "_")
-        .replace(/^[._]+|[._]+$/g, "")
+        .replace(/[^A-Za-z0-9@]+/g, "-")
+        .replace(/^-+|-+$/g, "")
         .slice(0, 50);
       return cleaned || null;
     } catch (e: any) {
