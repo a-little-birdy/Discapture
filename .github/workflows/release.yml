@@ -17,14 +17,14 @@ jobs:
             platform: win
             arch: x64
             artifact: Discapture-win-x64-setup.exe
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
-            artifact: Discapture-darwin-arm64.dmg
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            artifact: discapture_amd64.deb
+          # - os: macos-latest
+          #   platform: darwin
+          #   arch: arm64
+          #   artifact: Discapture-darwin-arm64.dmg
+          # - os: ubuntu-latest
+          #   platform: linux
+          #   arch: x64
+          #   artifact: discapture_amd64.deb
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -54,71 +54,71 @@ jobs:
           $version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
           & iscc /DAppVersion=$version "/DBuildDir=build\dev-win-x64\Discapture-dev" /DOutputDir=. "scripts\installer.iss"
 
-      # --- macOS: .app bundle in .dmg ---
-      - name: Package .app bundle (macOS)
-        if: matrix.platform == 'darwin'
-        env:
-          APP_VERSION: ${{ github.ref_name }}
-        run: |
-          VERSION="${APP_VERSION#v}"
-          SRC="build/dev-darwin-arm64/Discapture-dev.app"
-          DST="build/Discapture.app"
-          cp -R "$SRC" "$DST"
+      # # --- macOS: .app bundle in .dmg ---
+      # - name: Package .app bundle (macOS)
+      #   if: matrix.platform == 'darwin'
+      #   env:
+      #     APP_VERSION: ${{ github.ref_name }}
+      #   run: |
+      #     VERSION="${APP_VERSION#v}"
+      #     SRC="build/dev-darwin-arm64/Discapture-dev.app"
+      #     DST="build/Discapture.app"
+      #     cp -R "$SRC" "$DST"
 
-          # Patch the Info.plist that electrobun already generated.
-          # CFBundleExecutable stays as "launcher" — that's the real binary name.
-          PLIST="$DST/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleName Discapture" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+      #     # Patch the Info.plist that electrobun already generated.
+      #     # CFBundleExecutable stays as "launcher" — that's the real binary name.
+      #     PLIST="$DST/Contents/Info.plist"
+      #     /usr/libexec/PlistBuddy -c "Set :CFBundleName Discapture" "$PLIST"
+      #     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
+      #     /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST" 2>/dev/null \
+      #       || /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
 
-          hdiutil create -volname "Discapture" -srcfolder "$DST" -ov -format UDZO "${{ matrix.artifact }}"
+      #     hdiutil create -volname "Discapture" -srcfolder "$DST" -ov -format UDZO "${{ matrix.artifact }}"
 
-      # --- Linux: .deb package ---
-      - name: Package .deb (Linux)
-        if: matrix.platform == 'linux'
-        env:
-          APP_VERSION: ${{ github.ref_name }}
-        run: |
-          VERSION="${APP_VERSION#v}"
-          PKG="build/discapture_${VERSION}_amd64"
+      # # --- Linux: .deb package ---
+      # - name: Package .deb (Linux)
+      #   if: matrix.platform == 'linux'
+      #   env:
+      #     APP_VERSION: ${{ github.ref_name }}
+      #   run: |
+      #     VERSION="${APP_VERSION#v}"
+      #     PKG="build/discapture_${VERSION}_amd64"
 
-          mkdir -p "$PKG/DEBIAN"
-          mkdir -p "$PKG/usr/lib/discapture"
-          mkdir -p "$PKG/usr/bin"
-          mkdir -p "$PKG/usr/share/applications"
+      #     mkdir -p "$PKG/DEBIAN"
+      #     mkdir -p "$PKG/usr/lib/discapture"
+      #     mkdir -p "$PKG/usr/bin"
+      #     mkdir -p "$PKG/usr/share/applications"
 
-          cp -R build/dev-linux-x64/Discapture-dev/* "$PKG/usr/lib/discapture/"
+      #     cp -R build/dev-linux-x64/Discapture-dev/* "$PKG/usr/lib/discapture/"
 
-          ln -s /usr/lib/discapture/bin/launcher "$PKG/usr/bin/discapture"
+      #     ln -s /usr/lib/discapture/bin/launcher "$PKG/usr/bin/discapture"
 
-          cat > "$PKG/usr/share/applications/discapture.desktop" << EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Discapture
-          Comment=Discord chat capture and archival tool
-          Exec=/usr/lib/discapture/bin/launcher
-          Icon=/usr/lib/discapture/Resources/appIcon.png
-          Terminal=false
-          StartupWMClass=Discapture
-          Categories=Utility;Network;
-          EOF
+      #     cat > "$PKG/usr/share/applications/discapture.desktop" << EOF
+      #     [Desktop Entry]
+      #     Version=1.0
+      #     Type=Application
+      #     Name=Discapture
+      #     Comment=Discord chat capture and archival tool
+      #     Exec=/usr/lib/discapture/bin/launcher
+      #     Icon=/usr/lib/discapture/Resources/appIcon.png
+      #     Terminal=false
+      #     StartupWMClass=Discapture
+      #     Categories=Utility;Network;
+      #     EOF
 
-          cat > "$PKG/DEBIAN/control" << EOF
-          Package: discapture
-          Version: ${VERSION}
-          Section: utils
-          Priority: optional
-          Architecture: amd64
-          Depends: libwebkit2gtk-4.1-0, libgtk-3-0
-          Maintainer: Discapture
-          Description: Discord chat capture and archival tool
-          EOF
+      #     cat > "$PKG/DEBIAN/control" << EOF
+      #     Package: discapture
+      #     Version: ${VERSION}
+      #     Section: utils
+      #     Priority: optional
+      #     Architecture: amd64
+      #     Depends: libwebkit2gtk-4.1-0, libgtk-3-0
+      #     Maintainer: Discapture
+      #     Description: Discord chat capture and archival tool
+      #     EOF
 
-          dpkg-deb --build "$PKG"
-          mv "${PKG}.deb" "${{ matrix.artifact }}"
+      #     dpkg-deb --build "$PKG"
+      #     mv "${PKG}.deb" "${{ matrix.artifact }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
