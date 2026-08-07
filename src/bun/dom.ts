@@ -19,6 +19,17 @@ export interface RawMessage {
   embeds: string[];
 }
 
+export interface CaptureViewportState {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  msgCount: number;
+  isBeginning: boolean;
+  isRendered: boolean;
+  visibleMessageIds: string[];
+  layoutSignature: string;
+}
+
 // Parses every `[id^="chat-messages-"]` group inside the chat scroller
 // that intersects the scroller's visible viewport. Username and
 // timestamp carry across same-author groupings (Discord renders the
@@ -108,63 +119,119 @@ export function parseVisibleMessagesFromDOM(doc: Document): RawMessage[] {
   return messages;
 }
 
-// Coverage-based readiness check: returns true once the visible
-// viewport of the chat scroller is mostly rendered.
-//
-// Sums the heights of `[id^="chat-messages-"]` groups whose content
-// has text, clipped to the scroller's on-screen rect; passes when the
-// sum is >= 70% of the viewport height. Skeleton rows lack the
-// `chat-messages-` ID, so they contribute zero by construction.
-//
-// Also requires every visible `[class*="imageWrapper_"]` to have a
-// fully-loaded `<img>`; Discord lazy-attaches the img tag only once
-// bytes arrive.
-//
-// Beginning-of-channel: when `emptyChannelIcon_`/`beginningOfChannel_`
-// is present, the threshold drops to "any rendered content" since
-// the chat may not fill the viewport.
-export function isViewportRendered(doc: Document): boolean {
+// Collects everything the capture engine needs to decide whether a viewport
+// is ready and has stopped moving. This function must stay self-contained so
+// it can be serialized and run inside Discord by Puppeteer.
+export function getCaptureViewportState(doc: Document): CaptureViewportState {
+  const chatArea =
+    doc.querySelector('[class*="chatContent_"]') ||
+    doc.querySelector('[class*="chat_"] > [class*="content_"]');
   const scroller =
+    chatArea?.querySelector('[class*="managedReactiveScroller_"]') ||
     doc.querySelector('[class*="managedReactiveScroller_"]') ||
-    doc.querySelector('[class*="chatContent_"]');
-  if (!scroller) return false;
-  const sRect = scroller.getBoundingClientRect();
-  const sHeight = sRect.height;
-  if (sHeight <= 0) return false;
+    chatArea;
+  if (!scroller) {
+    return {
+      scrollTop: 0,
+      scrollHeight: 0,
+      clientHeight: 0,
+      msgCount: 0,
+      isBeginning: false,
+      isRendered: false,
+      visibleMessageIds: [],
+      layoutSignature: "missing-scroller",
+    };
+  }
 
+  const sRect = scroller.getBoundingClientRect();
   const inViewport = (el: Element) => {
     const r = el.getBoundingClientRect();
     return r.bottom >= sRect.top && r.top <= sRect.bottom;
   };
+  const visibleGroups = Array.from(
+    doc.querySelectorAll('[id^="chat-messages-"]')
+  ).filter(inViewport);
+  const visibleMessageIds = visibleGroups.map((group) => group.id);
 
-  let coveredHeight = 0;
-  const groups = doc.querySelectorAll('[id^="chat-messages-"]');
-  for (const g of groups) {
-    const r = g.getBoundingClientRect();
-    const top = Math.max(r.top, sRect.top);
-    const bottom = Math.min(r.bottom, sRect.bottom);
-    if (bottom <= top) continue;
-    const c = g.querySelector('[id^="message-content-"]');
-    if (!c) continue;
-    if ((c.textContent?.trim().length || 0) <= 5) continue;
-    coveredHeight += bottom - top;
-  }
-
-  const atBeginning = !!(
-    doc.querySelector('[class*="emptyChannelIcon_"]') ||
-    doc.querySelector('[class*="beginningOfChannel_"]')
+  let isRendered = sRect.height > 0 && visibleGroups.length > 0;
+  const placeholders = doc.querySelectorAll(
+    '[class*="messageGroupBlocker_"], [class*="skeleton"], [aria-busy="true"]'
   );
-  const minCoverage = atBeginning ? 1 : sHeight * 0.7;
-  if (coveredHeight < minCoverage) return false;
-
-  const wrappers = doc.querySelectorAll('[class*="imageWrapper_"]');
-  for (const w of wrappers) {
-    if (!inViewport(w)) continue;
-    const img = w.querySelector("img");
-    if (!img) return false;
-    if (!img.complete || img.naturalWidth === 0) return false;
+  for (const placeholder of Array.from(placeholders)) {
+    if (inViewport(placeholder)) isRendered = false;
   }
-  return true;
+
+  const mediaState: string[] = [];
+  for (const group of visibleGroups) {
+    for (const wrapper of Array.from(
+      group.querySelectorAll('[class*="imageWrapper_"]')
+    )) {
+      if (!inViewport(wrapper) || wrapper.querySelector("img")) continue;
+      mediaState.push("i:0:missing");
+      isRendered = false;
+    }
+    for (const image of Array.from(group.querySelectorAll("img"))) {
+      if (!inViewport(image)) continue;
+      const loaded = image.complete && image.naturalWidth > 0;
+      mediaState.push(
+        `i:${loaded ? 1 : 0}:${image.naturalWidth}x${image.naturalHeight}`
+      );
+      if (!loaded) isRendered = false;
+    }
+    for (const video of Array.from(group.querySelectorAll("video[autoplay]"))) {
+      if (!inViewport(video)) continue;
+      const media = video as HTMLVideoElement;
+      const loaded = media.readyState >= 2 || !!media.error;
+      mediaState.push(
+        `v:${loaded ? 1 : 0}:${media.videoWidth}x${media.videoHeight}`
+      );
+      if (!loaded) isRendered = false;
+    }
+  }
+
+  const beginningMarkers = doc.querySelectorAll(
+    '[class*="emptyChannelIcon_"], [class*="beginningOfChannel_"]'
+  );
+  const isBeginning = Array.from(beginningMarkers).some(inViewport);
+  const geometry = visibleGroups.map((group) => {
+    const r = group.getBoundingClientRect();
+    return `${group.id}:${Math.round(r.top)}:${Math.round(r.bottom)}`;
+  });
+
+  return {
+    scrollTop: scroller.scrollTop,
+    scrollHeight: scroller.scrollHeight,
+    clientHeight: scroller.clientHeight,
+    msgCount: doc.querySelectorAll('[id^="chat-messages-"]').length,
+    isBeginning,
+    isRendered,
+    visibleMessageIds,
+    layoutSignature: [
+      Math.round(scroller.scrollTop),
+      scroller.scrollHeight,
+      scroller.clientHeight,
+      ...geometry,
+      ...mediaState,
+    ].join("|"),
+  };
+}
+
+// Move by a predictable amount while retaining overlap between screenshots.
+// Assigning scrollTop avoids smooth-scroll timing and keyboard focus issues.
+export function scrollChatViewportUp(doc: Document): number {
+  const chatArea =
+    doc.querySelector('[class*="chatContent_"]') ||
+    doc.querySelector('[class*="chat_"] > [class*="content_"]');
+  const scroller =
+    chatArea?.querySelector('[class*="managedReactiveScroller_"]') ||
+    doc.querySelector('[class*="managedReactiveScroller_"]') ||
+    chatArea;
+  if (!scroller) return 0;
+
+  const before = scroller.scrollTop;
+  const distance = Math.max(1, Math.floor(scroller.clientHeight * 0.8));
+  scroller.scrollTop = Math.max(0, before - distance);
+  return before - scroller.scrollTop;
 }
 
 // Pre-screenshot DOM hygiene: clicks all spoiler reveals, removes the

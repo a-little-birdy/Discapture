@@ -5,8 +5,10 @@ import { existsSync } from "fs";
 import { rename } from "fs/promises";
 import {
   parseVisibleMessagesFromDOM,
-  isViewportRendered,
+  getCaptureViewportState,
+  scrollChatViewportUp,
   stripChromeAndRevealSpoilers,
+  type CaptureViewportState,
 } from "./dom";
 
 interface Attachment {
@@ -174,7 +176,9 @@ export class CaptureEngine {
       });
 
       await this.page.goto("https://discord.com/app", {
-        waitUntil: "networkidle2",
+        // Discord keeps background requests open. Waiting for network idle can
+        // consume the full navigation timeout even though the UI is usable.
+        waitUntil: "domcontentloaded",
         timeout: 60000,
       });
 
@@ -243,7 +247,8 @@ export class CaptureEngine {
       // Run the capture loop
       await this.captureLoop(sendProgress);
 
-      // Reverse screenshot numbering: capture goes newest->oldest (PageUp),
+      // Reverse screenshot numbering: capture goes newest->oldest
+      // (scrolling up),
       // but readers expect lowest index = oldest, highest = newest.
       await this.reverseScreenshotOrder();
 
@@ -384,10 +389,8 @@ export class CaptureEngine {
     }
   }
 
-  private async takeScreenshot(): Promise<void> {
-    if (!this.page || !this.session) return;
-
-    await this.revealSpoilers();
+  private async takeScreenshot(): Promise<boolean> {
+    if (!this.page || !this.session) return false;
 
     this.screenshotCount++;
     const screenshotPath = join(
@@ -399,9 +402,11 @@ export class CaptureEngine {
     try {
       // Use page.screenshot() to avoid element.screenshot() scrolling into view
       await this.page.screenshot({ path: screenshotPath });
+      return true;
     } catch (e: any) {
       console.log(`[capture] Screenshot failed: ${e.message}`);
       this.screenshotCount--;
+      return false;
     }
   }
 
@@ -461,21 +466,94 @@ export class CaptureEngine {
     }
   }
 
-  // Wraps `isViewportRendered` from ./dom in a polled wait. The
-  // predicate runs in the page; we inject its source into a thin
-  // `(fn)(document)` wrapper because waitForFunction's function-arg
-  // form can't take a `Document` from Node.
-  private async waitForVisibleMessages(timeoutMs: number): Promise<boolean> {
-    if (!this.page) return false;
-    try {
-      await this.page.waitForFunction(
-        `(${isViewportRendered.toString()})(document)`,
-        { timeout: timeoutMs, polling: 200 }
-      );
-      return true;
-    } catch {
-      return false;
+  private async getCaptureViewportState(): Promise<CaptureViewportState> {
+    if (!this.page) {
+      throw new Error("No page");
     }
+    return (await this.page.evaluate(
+      `(${getCaptureViewportState.toString()})(document)`
+    )) as CaptureViewportState;
+  }
+
+  // A viewport is capturable once its messages/media are ready and its layout
+  // signature has remained unchanged across several samples. The minimum wait
+  // gives Discord's virtualized list time to react to the scroll before a
+  // previously-rendered frame can be mistaken for the new one.
+  private async waitForStableViewport(
+    timeoutMs: number,
+    minimumWaitMs: number
+  ): Promise<boolean> {
+    const startedAt = Date.now();
+    let lastSignature = "";
+    let stableSamples = 0;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const state = await this.getCaptureViewportState();
+      if (state.isRendered && Date.now() - startedAt >= minimumWaitMs) {
+        if (state.layoutSignature === lastSignature) {
+          stableSamples++;
+        } else {
+          lastSignature = state.layoutSignature;
+          stableSamples = 1;
+        }
+        if (stableSamples >= 3) return true;
+      } else {
+        lastSignature = "";
+        stableSamples = 0;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    return false;
+  }
+
+  private async waitForViewportChange(
+    previous: CaptureViewportState,
+    timeoutMs: number
+  ): Promise<boolean> {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const current = await this.getCaptureViewportState();
+      if (
+        current.scrollHeight !== previous.scrollHeight ||
+        current.msgCount !== previous.msgCount ||
+        current.visibleMessageIds.join("|") !==
+          previous.visibleMessageIds.join("|")
+      ) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    return false;
+  }
+
+  private async scrollViewportUp(): Promise<number> {
+    if (!this.page) return 0;
+    return (await this.page.evaluate(
+      `(${scrollChatViewportUp.toString()})(document)`
+    )) as number;
+  }
+
+  private async captureCurrentViewport(
+    timeoutMs = 8000,
+    minimumWaitMs = 450
+  ): Promise<{ messages: ParsedMessage[]; state: CaptureViewportState }> {
+    await this.revealSpoilers();
+    if (!(await this.waitForStableViewport(timeoutMs, minimumWaitMs))) {
+      console.log(
+        "[capture] Viewport settle timed out; screenshotting current state"
+      );
+    }
+
+    // Keep the state that corresponds to the frame being captured. If Discord
+    // prepends older messages immediately after the screenshot, the next loop
+    // can detect that change instead of accidentally treating it as the top.
+    const state = await this.getCaptureViewportState();
+    const messages = await this.parseVisibleMessages();
+    this.accumulateMessages(messages);
+    if (await this.takeScreenshot()) {
+      this.linkMessagesToScreenshot(messages);
+    }
+    return { messages, state };
   }
 
   // Returns a sanitized DM partner / group name for the current page, or null
@@ -519,53 +597,14 @@ export class CaptureEngine {
     }
   }
 
-  private async getScrollState(): Promise<{
-    scrollTop: number;
-    scrollHeight: number;
-    msgCount: number;
-    isBeginning: boolean;
-  }> {
-    if (!this.page) return { scrollTop: 0, scrollHeight: 0, msgCount: 0, isBeginning: false };
-
-    return await this.page.evaluate(() => {
-      const scroller =
-        document.querySelector('[class*="managedReactiveScroller_"]') ||
-        document.querySelector('[class*="scroller_"][class*="auto_"]');
-      if (!scroller) return { scrollTop: 0, scrollHeight: 0, msgCount: 0, isBeginning: false };
-
-      const isBeginning = !!(
-        document.querySelector('[class*="emptyChannelIcon_"]') ||
-        document.querySelector('[class*="beginningOfChannel_"]')
-      );
-
-      return {
-        scrollTop: scroller.scrollTop,
-        scrollHeight: scroller.scrollHeight,
-        msgCount: document.querySelectorAll('[id^="chat-messages-"]').length,
-        isBeginning,
-      };
-    });
-  }
-
   private async captureLoop(sendProgress: ProgressCallback): Promise<void> {
     if (!this.page || !this.session) return;
 
-    // --- Wait for messages to fully render with actual text content ---
+    // --- Wait for the initial viewport and capture the bottom of the chat ---
     console.log("[capture] Waiting for messages to render...");
-    if (await this.waitForVisibleMessages(30000)) {
-      console.log("[capture] Messages with text content detected");
-    } else {
-      console.log("[capture] Timed out waiting for message text, continuing anyway");
-    }
-    // Wait for avatars/images/embeds to load
-    await new Promise((r) => setTimeout(r, 3000));
-
-    // --- Initial capture: screenshot the bottom of the chat BEFORE any scrolling ---
     console.log("[capture] Taking initial screenshot at bottom...");
-    const initialMessages = await this.parseVisibleMessages();
-    this.accumulateMessages(initialMessages);
-    await this.takeScreenshot();
-    this.linkMessagesToScreenshot(initialMessages);
+    const initialCapture = await this.captureCurrentViewport(15000, 300);
+    const initialMessages = initialCapture.messages;
 
     console.log(
       `[capture] Initial capture: ${initialMessages.length} visible, ${this.allMessages.length} total, screenshot #${this.screenshotCount}`
@@ -577,55 +616,39 @@ export class CaptureEngine {
       status: `Capturing... (${this.allMessages.length} messages, ${this.screenshotCount} screenshots)`,
     });
 
-    // --- Focus the message input for PageUp scrolling ---
-    const textBox = await this.page.$('div[role="textbox"]');
-    if (textBox) {
-      await textBox.click();
-      console.log("[capture] Focused message input for PageUp scrolling");
+    let currentState = initialCapture.state;
+    if (currentState.isBeginning) {
+      console.log("[capture] Entire chat fits in the initial viewport");
+      return;
     }
 
-    // --- Scroll loop: PageUp, wait, capture, repeat ---
-    let stuckCount = 0;
+    // --- Scroll loop: deterministic overlapping movement, settle, capture ---
 
     while (this.isRunning) {
-      // 1. Record state before scrolling
-      const beforeScroll = await this.getScrollState();
+      const beforeScroll = currentState;
+      const movedBy = await this.scrollViewportUp();
+      console.log(
+        `[capture] Scrolled up ${Math.round(movedBy)}px ` +
+          `(was ${Math.round(beforeScroll.scrollTop)})`
+      );
 
-      // 2. Scroll up with PageUp
-      await this.page.keyboard.press("PageUp");
-      console.log(`[capture] PageUp (was scrollTop: ${beforeScroll.scrollTop})`);
-
-      // 3. Wait for Discord to render the new viewport. Cap at 10s so a
-      // truly stalled channel doesn't lock up the whole capture.
-      if (!(await this.waitForVisibleMessages(10000))) {
-        console.log("[capture] Render wait timed out; screenshotting anyway");
+      // At the top of Discord's currently-loaded chunk, scrolling cannot move
+      // until older messages arrive. Give that load one bounded grace period;
+      // if nothing changes, this really is the top even without a marker.
+      if (movedBy <= 1 && beforeScroll.scrollTop <= 1) {
+        if (!(await this.waitForViewportChange(beforeScroll, 5000))) {
+          console.log("[capture] No older messages loaded; reached top of chat");
+          break;
+        }
       }
 
-      // 4. Parse messages and take screenshot AFTER content has loaded
-      const messages = await this.parseVisibleMessages();
-      this.accumulateMessages(messages);
-      await this.takeScreenshot();
-      this.linkMessagesToScreenshot(messages);
-
-      // 5. Check state after waiting
-      const afterScroll = await this.getScrollState();
-
-      const newContentLoaded =
-        afterScroll.scrollHeight > beforeScroll.scrollHeight ||
-        afterScroll.msgCount > beforeScroll.msgCount;
-
-      if (afterScroll.scrollTop <= 1 && !newContentLoaded) {
-        stuckCount = 1;
-      } else {
-        stuckCount = 0;
-      }
-
-      const reachedTop =
-        (afterScroll.scrollTop <= 1 && stuckCount >= 1) ||
-        afterScroll.isBeginning;
+      const capture = await this.captureCurrentViewport();
+      const messages = capture.messages;
+      const afterScroll = capture.state;
+      const reachedTop = afterScroll.isBeginning;
 
       console.log(
-        `[capture] Step ${this.screenshotCount}: ${messages.length} visible, ${this.allMessages.length} total, scroll=${afterScroll.scrollTop}/${afterScroll.scrollHeight}, msgs=${afterScroll.msgCount}, newContent=${newContentLoaded}, stuck=${stuckCount}, top=${reachedTop}`
+        `[capture] Step ${this.screenshotCount}: ${messages.length} visible, ${this.allMessages.length} total, scroll=${Math.round(afterScroll.scrollTop)}/${afterScroll.scrollHeight}, msgs=${afterScroll.msgCount}, top=${reachedTop}`
       );
 
       sendProgress({
@@ -640,6 +663,8 @@ export class CaptureEngine {
         console.log("[capture] Reached top of chat");
         break;
       }
+
+      currentState = afterScroll;
     }
   }
 

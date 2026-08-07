@@ -2,7 +2,8 @@ import { test, expect, beforeAll, afterAll } from "bun:test";
 import type { Browser, Page } from "puppeteer-core";
 import {
   parseVisibleMessagesFromDOM,
-  isViewportRendered,
+  getCaptureViewportState,
+  scrollChatViewportUp,
   stripChromeAndRevealSpoilers,
 } from "../src/bun/dom";
 import { launchTestBrowser, fixtureUrl, runInPage, stubNetwork } from "./helpers";
@@ -87,31 +88,31 @@ test("parser respects scroller viewport — small viewport clips message list", 
   }
 });
 
-test("isViewportRendered: true when fixture is fully rendered", async () => {
+test("capture viewport is ready when fixture is fully rendered", async () => {
   const page = await loadFixture("expand=1");
   try {
-    const ready = await runInPage(page, isViewportRendered);
-    expect(ready).toBe(true);
+    const state = await runInPage(page, getCaptureViewportState);
+    expect(state.isRendered).toBe(true);
   } finally {
     await page.close();
   }
 });
 
-test("isViewportRendered: false when viewport is dominated by skeletons", async () => {
+test("capture viewport is not ready when dominated by skeletons", async () => {
   // slow=99999 leaves the skeletons in place for the duration of the
   // test, so the predicate should return false.
   const page = await loadFixture("slow=99999");
   try {
     // Give the slow-load script a moment to swap skeletons in.
     await new Promise((r) => setTimeout(r, 100));
-    const ready = await runInPage(page, isViewportRendered);
-    expect(ready).toBe(false);
+    const state = await runInPage(page, getCaptureViewportState);
+    expect(state.isRendered).toBe(false);
   } finally {
     await page.close();
   }
 });
 
-test("isViewportRendered: false when an image wrapper has no <img> child", async () => {
+test("capture viewport is not ready when an image has not attached", async () => {
   const page = await loadFixture("expand=1");
   try {
     // Strip the <img> from the image wrapper to simulate Discord's
@@ -120,20 +121,72 @@ test("isViewportRendered: false when an image wrapper has no <img> child", async
       const wrapper = document.querySelector('[class*="imageWrapper_"]');
       wrapper?.querySelector("img")?.remove();
     });
-    const ready = await runInPage(page, isViewportRendered);
-    expect(ready).toBe(false);
+    const state = await runInPage(page, getCaptureViewportState);
+    expect(state.isRendered).toBe(false);
   } finally {
     await page.close();
   }
 });
 
-test("wait gate blocks during slow load and resolves once content arrives", async () => {
+test("capture viewport accepts short and media-only messages", async () => {
+  const page = await loadFixture("expand=1");
+  try {
+    await page.evaluate(() => {
+      document
+        .querySelectorAll('[id^="message-content-"]')
+        .forEach((content) => (content.textContent = "ok"));
+      document.querySelector('[id^="message-content-"]')!.textContent = "";
+    });
+    const state = await runInPage(page, getCaptureViewportState);
+    expect(state.isRendered).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+test("capture viewport state exposes a stable visible-message signature", async () => {
+  const page = await loadFixture();
+  try {
+    const state = await runInPage(page, getCaptureViewportState);
+    expect(state.isRendered).toBe(true);
+    expect(state.visibleMessageIds.length).toBeGreaterThan(0);
+    expect(state.layoutSignature).toContain(state.visibleMessageIds[0]);
+  } finally {
+    await page.close();
+  }
+});
+
+test("scrollChatViewportUp moves the chat scroller by 80% with overlap", async () => {
+  const page = await loadFixture();
+  try {
+    const before = await page.evaluate(() => {
+      const scroller = document.getElementById("scroller")!;
+      scroller.style.height = "250px";
+      scroller.scrollTop = scroller.scrollHeight;
+      return {
+        scrollTop: scroller.scrollTop,
+        clientHeight: scroller.clientHeight,
+      };
+    });
+    const movedBy = await runInPage(page, scrollChatViewportUp);
+    const after = await page.evaluate(
+      () => document.getElementById("scroller")!.scrollTop
+    );
+
+    expect(movedBy).toBe(Math.floor(before.clientHeight * 0.8));
+    expect(after).toBe(before.scrollTop - movedBy);
+  } finally {
+    await page.close();
+  }
+});
+
+test("capture state blocks during slow load and resolves once content arrives", async () => {
   // slow=200 gives ~9 swaps × 200ms ≈ 1.8s before all content is in.
   const page = await loadFixture("slow=200&expand=1");
   try {
     const start = Date.now();
     await page.waitForFunction(
-      `(${isViewportRendered.toString()})(document)`,
+      `(${getCaptureViewportState.toString()})(document).isRendered`,
       { timeout: 15000, polling: 100 }
     );
     const elapsed = Date.now() - start;

@@ -224,8 +224,7 @@
 
       // Slow-load simulates being mid-scroll, well below the top of
       // the channel — strip the beginning-of-channel markers so the
-      // predicate uses its real 70% coverage threshold instead of
-      // the relaxed at-beginning fallback.
+      // readiness check sees the placeholder-dominated viewport.
       document
         .querySelectorAll('[class*="emptyChannelIcon_"], [class*="beginningOfChannel_"]')
         .forEach((el) => el.remove());
