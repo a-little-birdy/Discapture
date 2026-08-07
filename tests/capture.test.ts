@@ -144,6 +144,49 @@ test("capture viewport accepts short and media-only messages", async () => {
   }
 });
 
+test("capture viewport follows Discord's visible placeholder state", async () => {
+  const page = await loadFixture("expand=1");
+  try {
+    await page.evaluate(() => {
+      const realImage = document.querySelector(
+        '[class*="embedWrapper_"] img'
+      ) as HTMLImageElement;
+      const placeholder = document.createElement("img");
+      placeholder.className =
+        "imagePlaceholder_test imagePlaceholderVisible_test";
+      placeholder.src =
+        "data:image/svg+xml," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="18"></svg>'
+        );
+      realImage.parentElement!.appendChild(placeholder);
+    });
+    await page.waitForFunction(
+      () =>
+        (
+          document.querySelector(
+            '[class*="imagePlaceholderVisible_"]'
+          ) as HTMLImageElement
+        ).complete
+    );
+
+    const loading = await runInPage(page, getCaptureViewportState);
+    expect(loading.isRendered).toBe(false);
+
+    await page.evaluate(() => {
+      const placeholder = document.querySelector(
+        '[class*="imagePlaceholderVisible_"]'
+      )!;
+      placeholder.className =
+        "imagePlaceholder_test imagePlaceholderHidden_test";
+    });
+    const loaded = await runInPage(page, getCaptureViewportState);
+    expect(loaded.isRendered).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
 test("capture viewport state exposes a stable visible-message signature", async () => {
   const page = await loadFixture();
   try {

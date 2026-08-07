@@ -603,7 +603,7 @@ export class CaptureEngine {
     // --- Wait for the initial viewport and capture the bottom of the chat ---
     console.log("[capture] Waiting for messages to render...");
     console.log("[capture] Taking initial screenshot at bottom...");
-    const initialCapture = await this.captureCurrentViewport(15000, 300);
+    const initialCapture = await this.captureCurrentViewport(8000, 300);
     const initialMessages = initialCapture.messages;
 
     console.log(

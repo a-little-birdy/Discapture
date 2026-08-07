@@ -172,9 +172,42 @@ export function getCaptureViewportState(doc: Document): CaptureViewportState {
     }
     for (const image of Array.from(group.querySelectorAll("img"))) {
       if (!inViewport(image)) continue;
-      const loaded = image.complete && image.naturalWidth > 0;
+      const className = image.getAttribute("class") || "";
+      const isDiscordPlaceholder = className.includes("imagePlaceholder_");
+      if (isDiscordPlaceholder) {
+        const isStillVisible = className.includes(
+          "imagePlaceholderVisible_"
+        );
+        mediaState.push(`p:${isStillVisible ? 1 : 0}`);
+        if (isStillVisible) isRendered = false;
+        // Discord intentionally leaves the hidden low-resolution placeholder
+        // beside the decoded real image. It must not block capture.
+        continue;
+      }
+
+      const source = (image.currentSrc || image.getAttribute("src") || "")
+        .trim()
+        .toLowerCase();
+      const isEmbedPreview = !!image.closest('[class*="embedWrapper_"]');
+      const isPlaceholder =
+        isEmbedPreview &&
+        (source.startsWith("data:") ||
+          source.startsWith("blob:") ||
+          image.getAttribute("data-loading") === "true" ||
+          image.getAttribute("aria-busy") === "true");
+      const style = doc.defaultView?.getComputedStyle(image);
+      const isVisible =
+        style?.visibility !== "hidden" &&
+        style?.display !== "none" &&
+        Number.parseFloat(style?.opacity || "1") > 0;
+      const loaded =
+        image.complete &&
+        image.naturalWidth > 0 &&
+        !isPlaceholder &&
+        isVisible;
       mediaState.push(
-        `i:${loaded ? 1 : 0}:${image.naturalWidth}x${image.naturalHeight}`
+        `i:${loaded ? 1 : 0}:${isPlaceholder ? 1 : 0}:` +
+          `${image.naturalWidth}x${image.naturalHeight}:${source}`
       );
       if (!loaded) isRendered = false;
     }
